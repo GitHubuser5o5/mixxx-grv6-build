@@ -1,0 +1,184 @@
+Description: XDJ-style behavior tweaks (waveform EQ decoupling, loop from cue)
+ 1. The RGB waveform shows the track's frequency content like on Pioneer
+    hardware: the EQ knobs and kill switches no longer scale the waveform
+    bands, so a closed EQ still shows whether the track has bass/mid/high
+    at that point. The per-band visual gains from the waveform preferences
+    still apply. Likewise the channel gain/trim knob (and replaygain) no
+    longer scale the overall waveform height -- the wave is drawn at a fixed
+    amplitude reflecting the track's own content, not the mix level.
+ 2. Pressing loop-out with no loop-in set creates a loop starting at the
+    main cue point (Pioneer behavior), instead of being ignored.
+ 3. The Filter effect (deck filter super knob) gets a Pioneer-style response
+    curve: gamma-shaped cutoff mapping with a plateau near the neutral
+    position (LPF: 20 percent turn ~14.7 kHz, half turn ~2.6 kHz) and a
+    mildly resonant default Q of 1.2 instead of Butterworth 0.707.
+Author: Pioneered CI <pioneered-build@localhost>
+Forwarded: no
+
+diff --git a/src/waveform/renderers/waveformrenderersignalbase.cpp b/src/waveform/renderers/waveformrenderersignalbase.cpp
+--- a/src/waveform/renderers/waveformrenderersignalbase.cpp
++++ b/src/waveform/renderers/waveformrenderersignalbase.cpp
+@@ -182,38 +182,17 @@
+     }
+ 
+     if (pLowGain || pMidGain || pHighGain) {
+-        // Per-band gain from the EQ knobs.
+-        CSAMPLE_GAIN lowGain = 1.0, midGain = 1.0, highGain = 1.0;
+-
+-        // Only adjust low/mid/high gains if EQs are enabled.
+-        if (m_pEQEnabled->get() > 0.0) {
+-            if (m_pLowFilterControlObject &&
+-                m_pMidFilterControlObject &&
+-                m_pHighFilterControlObject) {
+-                lowGain = static_cast<CSAMPLE_GAIN>(m_pLowFilterControlObject->get());
+-                midGain = static_cast<CSAMPLE_GAIN>(m_pMidFilterControlObject->get());
+-                highGain = static_cast<CSAMPLE_GAIN>(m_pHighFilterControlObject->get());
+-            }
+-
+-            lowGain *= static_cast<CSAMPLE_GAIN>(
+-                    factory->getVisualGain(WaveformWidgetFactory::Low));
+-            midGain *= static_cast<CSAMPLE_GAIN>(
+-                    factory->getVisualGain(WaveformWidgetFactory::Mid));
+-            highGain *= static_cast<CSAMPLE_GAIN>(
+-                    factory->getVisualGain(WaveformWidgetFactory::High));
+-
+-            if (m_pLowKillControlObject && m_pLowKillControlObject->get() > 0.0) {
+-                lowGain = 0;
+-            }
+-
+-            if (m_pMidKillControlObject && m_pMidKillControlObject->get() > 0.0) {
+-                midGain = 0;
+-            }
+-
+-            if (m_pHighKillControlObject && m_pHighKillControlObject->get() > 0.0) {
+-                highGain = 0;
+-            }
+-        }
++        // Pioneered: like on Pioneer hardware, the waveform shows the track's
++        // content, not the mix output -- the EQ knobs and kill switches must
++        // not scale the bands, otherwise a closed EQ hides whether the track
++        // has e.g. bass at that point. Only the per-band visual gains from
++        // the waveform preferences apply.
++        CSAMPLE_GAIN lowGain = static_cast<CSAMPLE_GAIN>(
++                factory->getVisualGain(WaveformWidgetFactory::Low));
++        CSAMPLE_GAIN midGain = static_cast<CSAMPLE_GAIN>(
++                factory->getVisualGain(WaveformWidgetFactory::Mid));
++        CSAMPLE_GAIN highGain = static_cast<CSAMPLE_GAIN>(
++                factory->getVisualGain(WaveformWidgetFactory::High));
+ 
+         if (pLowGain != nullptr) {
+             *pLowGain = lowGain;
+diff --git a/src/waveform/renderers/waveformwidgetrenderer.cpp b/src/waveform/renderers/waveformwidgetrenderer.cpp
+--- a/src/waveform/renderers/waveformwidgetrenderer.cpp
++++ b/src/waveform/renderers/waveformwidgetrenderer.cpp
+@@ -126,7 +126,12 @@
+     //Fetch parameters before rendering in order the display all sub-renderers with the same values
+     double rateRatio = m_pRateRatioCO->get();
+
+-    m_gain = m_pGainControlObject->get();
++    // Pioneered: draw the waveform at a fixed amplitude, like Pioneer gear --
++    // the channel gain/trim knob (and replaygain) scale total_gain, but they
++    // must not stretch the waveform taller or squash it shorter, so the wave
++    // keeps reflecting the track's own content rather than the mix level.
++    // total_gain still drives the audio path; only the visual scale is pinned.
++    m_gain = 1.0;
+
+     // Compute visual sample to pixel ratio
+     // Allow waveform to spread one visual sample across a hundred pixels
+diff --git a/src/engine/controls/loopingcontrol.cpp b/src/engine/controls/loopingcontrol.cpp
+--- a/src/engine/controls/loopingcontrol.cpp
++++ b/src/engine/controls/loopingcontrol.cpp
+@@ -919,6 +919,20 @@
+         }
+     }
+ 
++    // Pioneered: like on Pioneer gear, pressing loop-out without a loop-in
++    // creates a loop that starts at the main cue point.
++    if (!loopInfo.startPosition.isValid()) {
++        const auto cuePosition =
++                mixxx::audio::FramePos::fromEngineSamplePosMaybeInvalid(
++                        ControlObject::get(ConfigKey(
++                                getGroup(), QStringLiteral("cue_point"))));
++        if (cuePosition.isValid() && position > cuePosition) {
++            loopInfo.startPosition = cuePosition;
++            m_pCOLoopStartPosition->set(
++                    loopInfo.startPosition.toEngineSamplePosMaybeInvalid());
++        }
++    }
++
+     // If the user is trying to set a loop-out before the loop in or without
+     // having a loop-in, then ignore it.
+     if (!loopInfo.startPosition.isValid() || position <= loopInfo.startPosition) {
+diff --git a/src/effects/backends/builtin/filtereffect.cpp b/src/effects/backends/builtin/filtereffect.cpp
+--- a/src/effects/backends/builtin/filtereffect.cpp
++++ b/src/effects/backends/builtin/filtereffect.cpp
+@@ -8,6 +8,38 @@
+ namespace {
+ constexpr double kMinCorner = 13;    // Hz
+ constexpr double kMaxCorner = 22050; // Hz
++
++// Pioneered: reshape the knob-to-cutoff curve to feel like Pioneer hardware.
++// Stock Mixxx sweeps the full ~10.7 octaves linearly-in-log across the knob,
++// so a small turn already removes most of the musical content. The gamma
++// curve below creates a plateau near the neutral position and compresses the
++// aggressive cutting into the outer part of the throw:
++//   LPF at 20% turn ~14.7 kHz (barely audible), 50% ~2.6 kHz, 100% full cut.
++// Applies to whatever drives the lpf/hpf parameters (deck filter super knob
++// as well as the effect rack knobs).
++constexpr double kCurveGamma = 1.8;
++
++double shapeLpf(double lpf) {
++    if (lpf >= kMaxCorner) {
++        // exact corner value so the neutral-position bypass check still fires
++        return kMaxCorner;
++    }
++    double x = std::log(lpf / kMinCorner) / std::log(kMaxCorner / kMinCorner);
++    x = math_clamp(x, 0.0, 1.0); // x = 1 neutral, x = 0 full cut
++    const double y = 1.0 - std::pow(1.0 - x, kCurveGamma);
++    return kMinCorner * std::pow(kMaxCorner / kMinCorner, y);
++}
++
++double shapeHpf(double hpf) {
++    if (hpf <= kMinCorner) {
++        // exact corner value so the neutral-position bypass check still fires
++        return kMinCorner;
++    }
++    double x = std::log(hpf / kMinCorner) / std::log(kMaxCorner / kMinCorner);
++    x = math_clamp(x, 0.0, 1.0); // x = 0 neutral, x = 1 full cut
++    const double y = std::pow(x, kCurveGamma);
++    return kMinCorner * std::pow(kMaxCorner / kMinCorner, y);
++}
+ } // anonymous namespace
+ 
+ // static
+@@ -49,7 +81,9 @@
+             "Default: flat top")); // What does this mean?
+     q->setValueScaler(EffectManifestParameter::ValueScaler::Logarithmic);
+     q->setUnitsHint(EffectManifestParameter::UnitsHint::SampleRate);
+-    q->setRange(0.4, 0.707106781, 4.0); // 0.707106781 = Butterworth
++    // Pioneered: default raised from Butterworth (0.707) to a mild resonance
++    // so the sweep keeps some presence at the cutoff, like Pioneer filters
++    q->setRange(0.4, 1.2, 4.0);
+ 
+     EffectManifestParameterPointer hpf = pManifest->addParameter();
+     hpf->setId("hpf");
+@@ -69,7 +103,7 @@
+ FilterGroupState::FilterGroupState(const mixxx::EngineParameters& engineParameters)
+         : EffectState(engineParameters),
+           m_loFreq(kMaxCorner),
+-          m_q(0.707106781),
++          m_q(1.2),
+           m_hiFreq(kMinCorner) {
+     m_buffer = mixxx::SampleBuffer(engineParameters.samplesPerBuffer());
+     m_pLowFilter = new EngineFilterBiquad1Low(engineParameters.sampleRate(), m_loFreq, m_q, true);
+@@ -106,8 +140,8 @@
+         hpf = kMinCorner;
+         lpf = kMaxCorner;
+     } else {
+-        hpf = m_pHPF->value();
+-        lpf = m_pLPF->value();
++        hpf = shapeHpf(m_pHPF->value());
++        lpf = shapeLpf(m_pLPF->value());
+     }
+ 
+     if ((pState->m_loFreq != lpf) ||

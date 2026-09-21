@@ -1,0 +1,45 @@
+name: Build Mixxx 2.5.0 "stable 2" (arm64 .deb)
+
+# Debian trixie source package mixxx 2.5.0+dfsg-3 plus the patches listed in patches/series.
+# Run it by hand: Actions tab -> "Build Mixxx 2.5.0 stable 2" -> Run workflow.
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+    container: debian:trixie
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Enable source repos and install build tools
+        run: |
+          echo "deb-src http://deb.debian.org/debian trixie main" > /etc/apt/sources.list.d/src.list
+          apt-get update
+          apt-get install -y --no-install-recommends build-essential devscripts dpkg-dev quilt ca-certificates
+          apt-get build-dep -y mixxx
+
+      - name: Fetch source and apply patches
+        run: |
+          mkdir /build && cd /build
+          apt-get source mixxx
+          cd mixxx-*/
+          for p in $(cat "$GITHUB_WORKSPACE/patches/series"); do
+            echo "=== $p"
+            patch -p1 < "$GITHUB_WORKSPACE/patches/$p.patch"
+          done
+          DEBEMAIL=grv6-build@localhost DEBFULLNAME="GRV6 build" \
+            dch --local "+grv6.r${GITHUB_RUN_NUMBER}." "GRV6 stable 2 build ${GITHUB_RUN_NUMBER}"
+
+      - name: Build package
+        run: |
+          cd /build/mixxx-*/
+          DEB_BUILD_OPTIONS="nocheck parallel=$(nproc)" dpkg-buildpackage -b -uc -us
+
+      - name: Upload .deb
+        uses: actions/upload-artifact@v4
+        with:
+          name: mixxx-stable2-deb
+          path: |
+            /build/mixxx_*.deb
+            /build/mixxx-data_*.deb

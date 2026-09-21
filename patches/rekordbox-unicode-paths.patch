@@ -1,0 +1,77 @@
+Description: Rekordbox USB tracks with accented filenames load again, and a
+ missing file says so instead of ignoring the tap.
+ .
+ Two halves of one field report: "some tracks do not load". The file in
+ question ("BASTI - La Mamá ...") decodes cleanly; what fails is finding it.
+ The mount side of the fix lives in pi/usb-mount.sh (FAT sticks are now
+ mounted with utf8=1, so the kernel hands back the same UTF-8 bytes rekordbox
+ wrote into the PDB). This patch covers what Mixxx itself can do:
+ .
+ 1. When a rekordbox device is imported, a track path containing non-ASCII
+    characters that does not exist as written is retried in the other Unicode
+    normalisation form (NFC <-> NFD). rekordbox on macOS writes decomposed
+    names to FAT32 while the PDB string may be composed, or vice versa, and a
+    byte-exact lookup then misses a file that is plainly on the stick. ASCII
+    paths never touch the disk, so the import cost is unchanged for them.
+ .
+ Trimmed for the GRV6 build: the [Library],load_missing banner half was dropped (it only serves the Pioneered skin).
+Author: Pioneered CI <pioneered-build@localhost>
+Forwarded: no
+
+diff --git a/src/library/rekordbox/rekordboxfeature.cpp b/src/library/rekordbox/rekordboxfeature.cpp
+--- a/src/library/rekordbox/rekordboxfeature.cpp
++++ b/src/library/rekordbox/rekordboxfeature.cpp
+@@ -4,6 +4,7 @@
+ #include <rekordbox_anlz.h>
+ #include <rekordbox_pdb.h>
+ 
++#include <QFile>
+ #include <QMap>
+ #include <QMessageBox>
+ #include <QSet>
+@@ -295,6 +296,36 @@
+     return text.remove(QChar('\x0'));
+ }
+ 
++// Pioneered: resolve a track path whose accented characters may be stored in
++// the PDB in a different Unicode normalisation form than the one the
++// filesystem hands back. rekordbox on macOS writes decomposed (NFD) names to
++// FAT32 while the PDB string can be composed (NFC), or vice versa on Windows,
++// and a byte-exact lookup then misses a file that is plainly on the stick --
++// the load silently does nothing. Only paths with non-ASCII characters can be
++// affected, so the extra stat() is paid only for those; an ASCII path is
++// returned untouched without touching the disk.
++QString resolveUnicodePath(const QString& path) {
++    bool ascii = true;
++    for (const QChar& c : path) {
++        if (c.unicode() > 0x7f) {
++            ascii = false;
++            break;
++        }
++    }
++    if (ascii || QFile::exists(path)) {
++        return path;
++    }
++    const QString nfc = path.normalized(QString::NormalizationForm_C);
++    if (nfc != path && QFile::exists(nfc)) {
++        return nfc;
++    }
++    const QString nfd = path.normalized(QString::NormalizationForm_D);
++    if (nfd != path && QFile::exists(nfd)) {
++        return nfd;
++    }
++    return path;
++}
++
+ int createDevicePlaylist(QSqlDatabase& database, const QString& devicePath) {
+     int playlistID = kInvalidPlaylistId;
+ 
+@@ -369,7 +400,7 @@
+     QString album = albumsMap[track->album_id()];
+     QString year = QString::number(track->year());
+     QString genre = genresMap[track->genre_id()];
+-    QString location = devicePath + getText(track->file_path());
++    QString location = resolveUnicodePath(devicePath + getText(track->file_path()));
+     float bpm = static_cast<float>(track->tempo() / 100.0);
+     int bitrate = static_cast<int>(track->bitrate());
+     QString key = keysMap[track->key_id()];
