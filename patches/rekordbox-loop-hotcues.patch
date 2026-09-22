@@ -1,0 +1,74 @@
+Description: Import a Rekordbox hot cue's saved loop, not just its position
+ A Rekordbox hot cue can be a saved LOOP (set with the loop in/out controls
+ then saved to a pad), not just a plain position - the ANLZ cue entry has a
+ CUE_ENTRY_TYPE_LOOP variant with its own loop_time(), exactly like the
+ anonymous "memory cue" loops that rekordboxfeature.cpp already handles
+ correctly a few lines above this fix.
+ .
+ The hot-cue branch of both cue-parsing loops (the plain SECTION_TAGS_CUES
+ format and the "extended", comment/colour-carrying SECTION_TAGS_CUES_2
+ format) ignored this: it always passed mixxx::audio::kInvalidFramePos as
+ the end position to setHotCue(), regardless of the entry's actual type,
+ silently discarding the loop length and importing every such hot cue as a
+ plain point. setHotCue() itself already does the right thing with a valid
+ end position (CueType::Loop instead of CueType::HotCue) - it was simply
+ never being given one for hot cues. Both branches now check the entry's
+ type first and compute the real end position from loop_time() when it is a
+ loop, the same way the memory-cue loop case already does.
+Author: GRV6 build (local)
+Forwarded: no
+
+diff --git a/src/library/rekordbox/rekordboxfeature.cpp b/src/library/rekordbox/rekordboxfeature.cpp
+--- a/src/library/rekordbox/rekordboxfeature.cpp
++++ b/src/library/rekordbox/rekordboxfeature.cpp
+@@ -1197,10 +1197,26 @@
+                     if (hotCueIndex > lastHotCueIndex) {
+                         lastHotCueIndex = hotCueIndex;
+                     }
++                    // GRV6: a hot cue can be a saved LOOP in rekordbox, not just a position -
++                    // it has its own loop_time() exactly like a memory-cue loop does (see the
++                    // CUE_ENTRY_TYPE_LOOP case above). Passing kInvalidFramePos unconditionally,
++                    // as stock Mixxx does here, always creates a plain position cue and silently
++                    // drops the loop length. setHotCue() already knows what to do with a valid
++                    // end position (CueType::Loop instead of CueType::HotCue) - it was just
++                    // never being given one for hot cues.
++                    mixxx::audio::FramePos hotCueEndPosition = mixxx::audio::kInvalidFramePos;
++                    if (cueEntry->type() == rekordbox_anlz_t::CUE_ENTRY_TYPE_LOOP) {
++                        int endTime = static_cast<int>(cueEntry->loop_time()) - timingOffset;
++                        if (endTime < 1) {
++                            endTime = 1;
++                        }
++                        hotCueEndPosition = mixxx::audio::FramePos(
++                                sampleRateKhz * static_cast<double>(endTime));
++                    }
+                     setHotCue(
+                             track,
+                             position,
+-                            mixxx::audio::kInvalidFramePos,
++                            hotCueEndPosition,
+                             hotCueIndex,
+                             QString(),
+                             mixxx::RgbColor::nullopt());
+@@ -1263,9 +1279,21 @@
+                     if (hotCueIndex > lastHotCueIndex) {
+                         lastHotCueIndex = hotCueIndex;
+                     }
++                    // GRV6: same fix as the SECTION_TAGS_CUES hot cue case above, for the
++                    // "extended" (comment/colour-carrying) cue entries.
++                    mixxx::audio::FramePos hotCueEndPosition = mixxx::audio::kInvalidFramePos;
++                    if (cueExtendedEntry->type() == rekordbox_anlz_t::CUE_ENTRY_TYPE_LOOP) {
++                        int endTime = static_cast<int>(cueExtendedEntry->loop_time()) -
++                                timingOffset;
++                        if (endTime < 1) {
++                            endTime = 1;
++                        }
++                        hotCueEndPosition = mixxx::audio::FramePos(
++                                sampleRateKhz * static_cast<double>(endTime));
++                    }
+                     setHotCue(track,
+                             position,
+-                            mixxx::audio::kInvalidFramePos,
++                            hotCueEndPosition,
+                             hotCueIndex,
+                             fromUtf16BeString(cueExtendedEntry->comment()),
+                             mixxx::RgbColor(qRgb(

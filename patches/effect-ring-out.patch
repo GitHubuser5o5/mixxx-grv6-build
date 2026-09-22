@@ -15,10 +15,20 @@ Description: Let Echo and Reverb ring out instead of being cut off when disabled
  .
  EngineEffectChain::process() is extended, per input/output channel pair, so
  that once a channel would normally go from Disabling to fully Disabled, it
- instead keeps calling every effect in that chain - fed a silent (all-zero)
- dry buffer instead of the real one, so no new signal enters - for up to the
- chain's longest tailTimeMillis, then stops for good exactly as before. This
- is pure bookkeeping on top of the existing enableState machinery: the real
+ instead keeps calling every effect in that chain for up to the chain's
+ longest tailTimeMillis, then stops for good exactly as before. Only what
+ gets FED INTO the effects during that window is silenced (a separate
+ pEffectFeedIn, not the real pIn), so no new signal keeps the tail going;
+ the channel's own dry volume in the final mix stays completely normal
+ throughout, exactly as if the effect were simply off. (v2: the first
+ version of this patch silenced the final mix's dry term too, not just the
+ effect feed. Since switching which channel an effect unit is focused on
+ disables the previous channel's routing through exactly the same
+ Disabling path as turning the whole unit off, that bug made a channel's
+ own volume disappear for the entire tail window - not just the effect's -
+ whenever focus moved away from it while an effect with a tail was loaded.
+ Fixed by keeping the final dry+wet mix on the real pIn.) This is pure
+ bookkeeping on top of the existing enableState machinery: the real
  enableState/m_enableState fields, and the ordinary Enabling/Disabling/
  fadeout paths, are untouched, so every other effect and every other effect
  rack (including the quick-effect racks) behaves exactly as it does in stock
@@ -194,7 +204,7 @@ diff --git a/src/engine/effects/engineeffectchain.cpp b/src/engine/effects/engin
  
      for (const ChannelHandleAndGroup& inputChannel : registeredInputChannels) {
          ChannelHandleMap<ChannelStatus> outputChannelMap;
-@@ -208,6 +210,40 @@
+@@ -208,6 +210,49 @@
          }
      }
  
@@ -223,42 +233,43 @@ diff --git a/src/engine/effects/engineeffectchain.cpp b/src/engine/effects/engin
 +            effectiveChainEnableState == EffectEnableState::Disabled) {
 +        // Genuinely disabled already (not Enabling/Enabled/Disabling, so this cannot
 +        // interfere with the normal re-enable ramp): keep processing for the rest of the
-+        // tail, with the dry input silenced below.
++        // tail, with the dry signal FED INTO THE EFFECTS silenced below (so no new signal
++        // is fed into whatever is ringing) - but NOT the dry signal in the final mix, which
++        // must stay real: this is still an active, routed channel that should keep sounding
++        // normal, just with a decaying wet tail added on top. (Bug fixed here: an earlier
++        // version of this patch silenced both, which - since switching which channel a unit
++        // is focused on disables the previous channel's routing exactly the same way turning
++        // the unit off does - made a channel's own volume vanish for the whole tail window
++        // whenever FX focus moved away from it while an effect with a tail was loaded.)
 +        effectiveChainEnableState = EffectEnableState::Enabled;
 +        feedSilenceThisCallback = true;
 +        const unsigned int framesThisCallback = numSamples / 2; // engine buffers are stereo
 +        channelStatus.tailFramesRemaining -=
 +                std::min(channelStatus.tailFramesRemaining, framesThisCallback);
 +    }
-+    CSAMPLE* pDryIn = feedSilenceThisCallback ? m_silentBuffer.data() : pIn;
++    // Only feeds the effect processors below, so a tail doesn't keep absorbing new signal.
++    // The final dry+wet mix further down uses the real pIn, never this.
++    CSAMPLE* pEffectFeedIn = feedSilenceThisCallback ? m_silentBuffer.data() : pIn;
 +
      CSAMPLE currentMixKnob = m_dMix;
      CSAMPLE lastCallbackMixKnob = channelStatus.oldMixKnob;
  
-@@ -217,7 +253,7 @@
+@@ -217,7 +262,7 @@
          // after writing to the output buffer. This requires not to use the same buffer
          // for in and output: Also, ChannelMixer::applyEffectsAndMixChannels
          // requires that the input buffer does not get modified.
 -        CSAMPLE* pIntermediateInput = pIn;
-+        CSAMPLE* pIntermediateInput = pDryIn;
++        CSAMPLE* pIntermediateInput = pEffectFeedIn;
          CSAMPLE* pIntermediateOutput;
          SINT effectChainGroupDelayFrames = 0;
          bool firstAddDryToWetEffectProcessed = false;
-@@ -281,7 +317,7 @@
+@@ -279,6 +324,9 @@
+             // intermediate input of the next effect if there was one.
+             if (m_mixMode == EffectChainMixMode::DrySlashWet) {
                  // Dry/Wet mode: output = (input * (1-mix knob)) + (wet * mix knob)
++                // Real pIn here, not pEffectFeedIn: this channel's own dry volume must stay
++                // normal through a tail window, whether the effect is off or just not
++                // currently focused - only what gets fed into the effect itself is silenced.
                  SampleUtil::copy2WithRampingGain(
                          pOut,
--                        pIn,
-+                        pDryIn,
-                         1.0f - lastCallbackMixKnob,
-                         1.0f - currentMixKnob,
-                         pIntermediateInput,
-@@ -292,7 +328,7 @@
-                 // Dry+Wet mode: output = input + (wet * mix knob)
-                 SampleUtil::copy2WithRampingGain(
-                         pOut,
--                        pIn,
-+                        pDryIn,
-                         1.0f,
-                         1.0f,
-                         pIntermediateInput,
+                         pIn,
