@@ -1,0 +1,82 @@
+diff --git a/src/library/rekordbox/rekordboxfeature.cpp b/src/library/rekordbox/rekordboxfeature.cpp
+--- a/src/library/rekordbox/rekordboxfeature.cpp
++++ b/src/library/rekordbox/rekordboxfeature.cpp
+@@ -1561,13 +1561,14 @@
+ }
+ 
+ bool RekordboxPlaylistModel::isColumnInternal(int column) {
+-    // GRV6: fixed appliance column set - Color, #, Title, Artist, BPM, Key, Duration.
++    // GRV6: fixed appliance column set - Color, #, Title, Artist, BPM, Key, Rating, Duration.
+     if (column == fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_COLOR) ||
+             column == fieldIndex(ColumnCache::COLUMN_PLAYLISTTRACKSTABLE_POSITION) ||
+             column == fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_TITLE) ||
+             column == fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_ARTIST) ||
+             column == fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_BPM) ||
+             column == fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_KEY) ||
++            column == fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_RATING) ||
+             column == fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_DURATION)) {
+         return false;
+     }
+diff --git a/src/widget/wtracktableview.cpp b/src/widget/wtracktableview.cpp
+--- a/src/widget/wtracktableview.cpp
++++ b/src/widget/wtracktableview.cpp
+@@ -370,13 +370,14 @@
+     const int titleColumn = pTrackModel->fieldIndex(QStringLiteral("title"));
+     const int bpmColumn = pTrackModel->fieldIndex(QStringLiteral("bpm"));
+     const int keyColumn = pTrackModel->fieldIndex(QStringLiteral("key"));
++    const int ratingColumn = pTrackModel->fieldIndex(QStringLiteral("rating"));
+     const int durationColumn = pTrackModel->fieldIndex(QStringLiteral("duration"));
+     if (colorColumn < 0 || posColumn < 0 || artistColumn < 0 || titleColumn < 0 ||
+-            bpmColumn < 0 || keyColumn < 0 || durationColumn < 0) {
++            bpmColumn < 0 || keyColumn < 0 || ratingColumn < 0 || durationColumn < 0) {
+         return;
+     }
+ 
+-    // Visual order: Color, #, Title, Artist, BPM, Key, Duration.
++    // Visual order: Color, #, Title, Artist, BPM, Key, Rating, Duration.
+     QHeaderView* pHeader = horizontalHeader();
+     const int logicalOrder[] = {colorColumn,
+             posColumn,
+@@ -384,6 +385,7 @@
+             artistColumn,
+             bpmColumn,
+             keyColumn,
++            ratingColumn,
+             durationColumn};
+     int visualTarget = 0;
+     for (const int logical : logicalOrder) {
+@@ -399,14 +401,16 @@
+         return;
+     }
+     const QFontMetrics metrics(font());
+-    // Content-sized columns: a narrow swatch, # plus sort arrow, bpm/key text, m:ss durations.
++    // Content-sized columns: a narrow swatch, # plus sort arrow, bpm/key text, 5 stars, m:ss durations.
+     const int colorWidth = 14;
+     const int posWidth = metrics.horizontalAdvance(QStringLiteral("9999")) + 24;
+     const int bpmWidth = metrics.horizontalAdvance(QStringLiteral("999.9")) + 24;
+     const int keyWidth = metrics.horizontalAdvance(QStringLiteral("A#m")) + 24;
++    const int ratingWidth = 90;
+     const int durationWidth =
+             metrics.horizontalAdvance(QStringLiteral("88:88")) + 16;
+-    int remaining = viewportWidth - colorWidth - posWidth - bpmWidth - keyWidth - durationWidth;
++    int remaining = viewportWidth - colorWidth - posWidth - bpmWidth - keyWidth -
++            ratingWidth - durationWidth;
+     if (remaining < 120) {
+         remaining = 120;
+     }
+@@ -419,12 +423,14 @@
+     setColumnWidth(artistColumn, artistWidth);
+     setColumnWidth(bpmColumn, bpmWidth);
+     setColumnWidth(keyColumn, keyWidth);
++    setColumnWidth(ratingColumn, ratingWidth);
+     // GRV6: set durationColumn's width explicitly too, instead of relying only on
+     // setStretchLastSection (loadTrackModel() calls that BEFORE the moveSection()
+     // reordering above runs, so Qt may still be tracking a different column as
+     // "last" for stretch purposes at that point - this removes the ambiguity).
+     // setStretchLastSection is kept as well so a later window resize still tracks live.
+-    const int usedWidth = colorWidth + posWidth + titleWidth + artistWidth + bpmWidth + keyWidth;
++    const int usedWidth = colorWidth + posWidth + titleWidth + artistWidth + bpmWidth +
++            keyWidth + ratingWidth;
+     const int stretchedDurationWidth = viewportWidth - usedWidth > durationWidth
+             ? viewportWidth - usedWidth
+             : durationWidth;
