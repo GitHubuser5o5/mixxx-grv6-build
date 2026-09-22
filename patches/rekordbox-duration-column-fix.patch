@@ -1,0 +1,22 @@
+diff --git a/src/widget/wtracktableview.cpp b/src/widget/wtracktableview.cpp
+--- a/src/widget/wtracktableview.cpp
++++ b/src/widget/wtracktableview.cpp
+@@ -419,7 +419,17 @@
+     setColumnWidth(artistColumn, artistWidth);
+     setColumnWidth(bpmColumn, bpmWidth);
+     setColumnWidth(keyColumn, keyWidth);
+-    // durationColumn is the last visual section and stretches to fill
++    // GRV6: set durationColumn's width explicitly too, instead of relying only on
++    // setStretchLastSection (loadTrackModel() calls that BEFORE the moveSection()
++    // reordering above runs, so Qt may still be tracking a different column as
++    // "last" for stretch purposes at that point - this removes the ambiguity).
++    // setStretchLastSection is kept as well so a later window resize still tracks live.
++    const int usedWidth = colorWidth + posWidth + titleWidth + artistWidth + bpmWidth + keyWidth;
++    const int stretchedDurationWidth = viewportWidth - usedWidth > durationWidth
++            ? viewportWidth - usedWidth
++            : durationWidth;
++    setColumnWidth(durationColumn, stretchedDurationWidth);
++    // durationColumn is also the last visual section and keeps stretching to fill
+     // the remaining width (setStretchLastSection in loadTrackModel).
+ }
+ 
