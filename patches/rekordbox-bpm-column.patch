@@ -1,0 +1,69 @@
+diff --git a/src/library/rekordbox/rekordboxfeature.cpp b/src/library/rekordbox/rekordboxfeature.cpp
+--- a/src/library/rekordbox/rekordboxfeature.cpp
++++ b/src/library/rekordbox/rekordboxfeature.cpp
+@@ -1561,11 +1561,12 @@
+ }
+ 
+ bool RekordboxPlaylistModel::isColumnInternal(int column) {
+-    // GRV6: fixed appliance column set - Color, #, Title, Artist, Key, Duration.
++    // GRV6: fixed appliance column set - Color, #, Title, Artist, BPM, Key, Duration.
+     if (column == fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_COLOR) ||
+             column == fieldIndex(ColumnCache::COLUMN_PLAYLISTTRACKSTABLE_POSITION) ||
+             column == fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_TITLE) ||
+             column == fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_ARTIST) ||
++            column == fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_BPM) ||
+             column == fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_KEY) ||
+             column == fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_DURATION)) {
+         return false;
+diff --git a/src/widget/wtracktableview.cpp b/src/widget/wtracktableview.cpp
+--- a/src/widget/wtracktableview.cpp
++++ b/src/widget/wtracktableview.cpp
+@@ -368,19 +368,21 @@
+     const int posColumn = pTrackModel->fieldIndex(QStringLiteral("position"));
+     const int artistColumn = pTrackModel->fieldIndex(QStringLiteral("artist"));
+     const int titleColumn = pTrackModel->fieldIndex(QStringLiteral("title"));
++    const int bpmColumn = pTrackModel->fieldIndex(QStringLiteral("bpm"));
+     const int keyColumn = pTrackModel->fieldIndex(QStringLiteral("key"));
+     const int durationColumn = pTrackModel->fieldIndex(QStringLiteral("duration"));
+     if (colorColumn < 0 || posColumn < 0 || artistColumn < 0 || titleColumn < 0 ||
+-            keyColumn < 0 || durationColumn < 0) {
++            bpmColumn < 0 || keyColumn < 0 || durationColumn < 0) {
+         return;
+     }
+ 
+-    // Visual order: Color, #, Title, Artist, Key, Duration.
++    // Visual order: Color, #, Title, Artist, BPM, Key, Duration.
+     QHeaderView* pHeader = horizontalHeader();
+     const int logicalOrder[] = {colorColumn,
+             posColumn,
+             titleColumn,
+             artistColumn,
++            bpmColumn,
+             keyColumn,
+             durationColumn};
+     int visualTarget = 0;
+@@ -397,13 +399,14 @@
+         return;
+     }
+     const QFontMetrics metrics(font());
+-    // Content-sized columns: a narrow swatch, # plus sort arrow, key names, m:ss durations.
++    // Content-sized columns: a narrow swatch, # plus sort arrow, bpm/key text, m:ss durations.
+     const int colorWidth = 14;
+     const int posWidth = metrics.horizontalAdvance(QStringLiteral("9999")) + 24;
++    const int bpmWidth = metrics.horizontalAdvance(QStringLiteral("999.9")) + 24;
+     const int keyWidth = metrics.horizontalAdvance(QStringLiteral("A#m")) + 24;
+     const int durationWidth =
+             metrics.horizontalAdvance(QStringLiteral("88:88")) + 16;
+-    int remaining = viewportWidth - colorWidth - posWidth - keyWidth - durationWidth;
++    int remaining = viewportWidth - colorWidth - posWidth - bpmWidth - keyWidth - durationWidth;
+     if (remaining < 120) {
+         remaining = 120;
+     }
+@@ -414,6 +417,7 @@
+     setColumnWidth(posColumn, posWidth);
+     setColumnWidth(titleColumn, titleWidth);
+     setColumnWidth(artistColumn, artistWidth);
++    setColumnWidth(bpmColumn, bpmWidth);
+     setColumnWidth(keyColumn, keyWidth);
+     // durationColumn is the last visual section and stretches to fill
+     // the remaining width (setStretchLastSection in loadTrackModel).
