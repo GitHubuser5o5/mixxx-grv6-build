@@ -1,0 +1,115 @@
+Description: Retry sound device setup instead of showing an undismissable dialog
+ This kiosk build has no keyboard, mouse or touchscreen attached.
+ MixxxMainWindow::initialize() builds and exec()'s a direct QMessageBox (not
+ routed through ErrorDialogHandler, so error-dialog-banner.patch does not
+ cover it) with Retry/Reconfigure/Help/Exit buttons if the configured sound
+ devices fail to open at startup, and another with Continue/Reconfigure/Exit
+ if none of the configured outputs come up. On a Pi, a cold boot can plausibly
+ reach this point before a USB audio interface has finished enumerating, and
+ with nothing able to click either dialog, Mixxx would simply hang here
+ forever - before the skin or a single control is even usable, so a banner
+ would not help either.
+ .
+ Replaces both with straight retries: up to 6 attempts at setupDevices(), one
+ second apart, re-querying devices (clearAndQueryDevices()) between attempts
+ the same way the stock dialog's own Retry button did. If devices still will
+ not open, or none of the configured outputs are present, log why and exit(0)
+ - the same outcome the dialogs' own Exit button gave - so the kiosk's
+ restart loop (~/.xinitrc) gets another try shortly instead of hanging
+ indefinitely. Only affects this one startup sequence; a sound device lost
+ mid-session goes through SoundManager's own runtime handling, a separate
+ code path this does not touch. soundDeviceBusyDlg, soundDeviceErrorMsgDlg,
+ soundDeviceErrorDlg and noOutputDlg are left defined but now unused/dead
+ code (confirmed no other caller anywhere in the source tree), to keep this
+ diff minimal.
+Author: GRV6 build (local)
+Forwarded: no
+
+diff --git a/src/mixxxmainwindow.cpp b/src/mixxxmainwindow.cpp
+--- a/src/mixxxmainwindow.cpp
++++ b/src/mixxxmainwindow.cpp
+@@ -5,6 +5,7 @@
+ #include <QDebug>
+ #include <QFileDialog>
+ #include <QOpenGLContext>
++#include <QThread>
+ #include <QUrl>
+ 
+ #if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+@@ -335,40 +336,43 @@
+         checkDirectRendering();
+     }
+ 
+-    // Sound hardware setup
+-    // Try to open configured devices. If that fails, display dialogs
+-    // that allow to either retry, reconfigure devices or exit.
+-    bool retryClicked;
+-    do {
+-        retryClicked = false;
+-        SoundDeviceStatus result = m_pCoreServices->getSoundManager()->setupDevices();
+-        if (result == SoundDeviceStatus::ErrorDeviceCount ||
+-                result == SoundDeviceStatus::ErrorExcessiveOutputChannel) {
+-            if (soundDeviceBusyDlg(&retryClicked) != QDialog::Accepted) {
+-                exit(0);
+-            }
+-        } else if (result != SoundDeviceStatus::Ok) {
+-            if (soundDeviceErrorMsgDlg(result, &retryClicked) !=
+-                    QDialog::Accepted) {
+-                exit(0);
+-            }
+-        }
+-    } while (retryClicked);
++    // Sound hardware setup.
++    // GRV6 kiosk build: this rig has no keyboard, mouse or touchscreen, so the stock
++    // Retry/Reconfigure/Help/Exit dialogs below (soundDeviceBusyDlg, soundDeviceErrorMsgDlg,
++    // noOutputDlg - now unused but left in place) could never be dismissed here: on a cold
++    // boot where the audio interface has not finished enumerating yet, Mixxx would simply
++    // hang before the skin or any control is even usable. Retry a few times with a short
++    // delay instead - the interface may just need a moment - and if it is still not working,
++    // exit(0) so the kiosk's restart loop (~/.xinitrc) gives it another try shortly, rather
++    // than hanging here indefinitely. This only affects startup; a device lost mid-session
++    // goes through SoundManager's own runtime handling, a different code path untouched here.
++    constexpr int kSoundDeviceMaxAttempts = 6;
++    constexpr int kSoundDeviceRetryDelayMillis = 1000;
++    SoundDeviceStatus result = m_pCoreServices->getSoundManager()->setupDevices();
++    for (int attempt = 2;
++            result != SoundDeviceStatus::Ok && attempt <= kSoundDeviceMaxAttempts;
++            ++attempt) {
++        qWarning() << "Sound device setup failed, status" << static_cast<int>(result)
++                   << "- retrying (attempt" << attempt << "of" << kSoundDeviceMaxAttempts
++                   << ") in" << kSoundDeviceRetryDelayMillis << "ms";
++        QThread::msleep(kSoundDeviceRetryDelayMillis);
++        m_pCoreServices->getSoundManager()->clearAndQueryDevices();
++        result = m_pCoreServices->getSoundManager()->setupDevices();
++    }
++    if (result != SoundDeviceStatus::Ok) {
++        qWarning() << "Sound device setup still failing after" << kSoundDeviceMaxAttempts
++                   << "attempts (status" << static_cast<int>(result)
++                   << ") - exiting so the kiosk restart loop (~/.xinitrc) can try again.";
++        exit(0);
++    }
+ 
+-    // Test for at least one output device. If none, display another dialog
+-    // that says "mixxx will barely work with no outs".
+-    // In case of persisting errors, the user has already received a message
+-    // above. So we can just check the output count here.
+-    while (m_pCoreServices->getSoundManager()->getConfig().getOutputs().count() == 0) {
+-        // Exit when we press the Exit button in the noSoundDlg dialog
+-        // only call it if result != OK
+-        bool continueClicked = false;
+-        if (noOutputDlg(&continueClicked) != QDialog::Accepted) {
+-            exit(0);
+-        }
+-        if (continueClicked) {
+-            break;
+-        }
++    // Test for at least one output device. If none, Mixxx would run with audio processing
++    // disabled - useless for this rig - so exit(0) the same way the stock "No Output Devices"
++    // dialog's Exit button would, rather than showing a dialog nothing can dismiss.
++    if (m_pCoreServices->getSoundManager()->getConfig().getOutputs().count() == 0) {
++        qWarning() << "No output sound devices configured - exiting so the kiosk restart "
++                      "loop (~/.xinitrc) can try again.";
++        exit(0);
+     }
+ 
+     // The user has either reconfigured devices or accepted no outputs,

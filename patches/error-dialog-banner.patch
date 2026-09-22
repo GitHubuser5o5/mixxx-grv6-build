@@ -1,0 +1,187 @@
+Description: Replace every ErrorDialogHandler popup with a skin control
+ ErrorDialogHandler is Mixxx's single shared route for "show the user an error"
+ from any thread: the database, library import/export, broadcasting,
+ recording, controller mapping script exceptions, and more all go through
+ ErrorDialogHandler::errorDialog(), which built and exec()'d (for the common
+ modal case) or show()'d (the rarer non-modal case, e.g. controller script
+ errors) a real QMessageBox.
+ .
+ This kiosk build has no keyboard, mouse or touchscreen attached. A modal
+ QMessageBox blocks the whole GUI thread - and every other error routed
+ through this same handler - until it is clicked, which here never happens;
+ a non-modal one just sits on screen, unclickable, for the rest of the
+ session. Confirmed independently of load-failed-banner.patch, which only
+ covers BaseTrackPlayer's own direct QMessageBox::warning() call - a
+ separate code path that does not go through this handler at all.
+ .
+ errorDialog() now logs the message with qWarning() and raises
+ [Library],app_error instead of building any dialog. The skin shows it as a
+ banner; the controller's BACK button clears it with an ordinary
+ ControlObject write, same mechanism as load_error. The per-key dedup list is
+ cleared immediately (nothing keeps a banner "still showing" the way a real
+ dialog would), so a recurrence of the same error is reported again rather
+ than being silently swallowed for the rest of the session. stdButtonClicked
+ is emitted synchronously with Close (never Ignore, which would silence the
+ key for the session; never Retry, which would reload the controller
+ mapping), so callers that wait for a click - only
+ ControllerScriptEngineBase, which otherwise stays silenced on every further
+ controller-script error once the first one shows - are released right away.
+ A should-quit (critical/fatal) error still exits Mixxx, immediately rather
+ than after a click that will never come, so the kiosk's restart loop
+ (~/.xinitrc) brings it back up promptly instead of hanging indefinitely.
+Author: GRV6 build (local)
+Forwarded: no
+
+diff --git a/src/errordialoghandler.cpp b/src/errordialoghandler.cpp
+--- a/src/errordialoghandler.cpp
++++ b/src/errordialoghandler.cpp
+@@ -1,27 +1,19 @@
+ #include "errordialoghandler.h"
+ 
+ #include <QCoreApplication>
+-#include <QGuiApplication>
+ #include <QScopedPointer>
+-#include <QScreen>
+ #include <QThread>
+ #include <QtDebug>
+ 
++#include "control/controlobject.h"
+ #include "moc_errordialoghandler.cpp"
+ #include "util/assert.h"
+ #include "util/compatibility/qmutex.h"
+ #include "util/versionstore.h"
+-#include "util/widgethelper.h"
+ 
+-namespace {
+-// Gross estimated dimensions for the size of the error dialog,
+-// with Show Details expanded.
+-constexpr int kEstimatedShowDetailedDialogWidth = 1000; // px
+-constexpr int kEstimatedShowDetailedDialogHeight = 500; // px
+-constexpr int kEstimatedDialogPadding = 50;             // px
+-// used to push the dialog away from screen borders to not cover taskbars
+-constexpr int kMinimumDialogMargin = 40; // px
+-} // namespace
++// GRV6 kiosk build: the dialog-sizing constants and the QScreen/QGuiApplication/widgethelper
++// includes they needed are gone along with the QMessageBox this file used to build - see
++// ErrorDialogHandler::errorDialog() below.
+ 
+ ErrorDialogProperties::ErrorDialogProperties()
+         : m_title(VersionStore::applicationName()),
+@@ -152,85 +144,41 @@
+         return;
+     }
+ 
+-    QMessageBox* pMsgBox = new QMessageBox();
+-    pMsgBox->setIcon(props->m_icon);
+-    pMsgBox->setWindowTitle(props->m_title);
+-    pMsgBox->setText(props->m_text);
+-    if (!props->m_infoText.isEmpty()) {
+-        pMsgBox->setInformativeText(props->m_infoText);
+-    }
++    // GRV6 kiosk build: this rig has no keyboard, mouse or touchscreen. A modal QMessageBox
++    // (the stock code used to create and exec() here) blocks the whole GUI thread - and
++    // everything else routed through this shared handler - until it is clicked, which on this
++    // kiosk never happens; the rare non-modal one (e.g. ControllerScriptEngineBase's mapping-
++    // error dialog) instead sits on screen for the rest of the session with the same problem.
++    // Log the error and raise [Library],app_error instead, which the skin shows as a banner
++    // the controller's BACK button clears - the same mechanism as [Library],load_error (see
++    // BaseTrackPlayer::slotLoadFailed and GRV6/SKIN-NOTES.md).
++    qWarning().noquote() << props->m_title + QStringLiteral(": ") + props->m_text +
++                    (props->m_infoText.isEmpty()
++                                    ? QString()
++                                    : (QStringLiteral(" - ") + props->m_infoText));
+     if (!props->m_details.isEmpty()) {
+-        pMsgBox->setDetailedText(props->m_details);
+-        if (props->m_detailsUseMonospaceFont) {
+-            // There is no event to respond on the Show Details button of QMessagBox.
+-            // Therefore we must consider the expanded size for positioning the dialog initially.
+-            auto* pScreen =
+-                    mixxx::widgethelper::getScreen(*pMsgBox);
+-            if (!pScreen) {
+-                // Fallback to obtain the primary screen when mixxx::widgethelper::getScreen can't
+-                // determine the screen. This happens always with Qt <5.14
+-                pScreen = qGuiApp->primaryScreen();
+-            }
+-            DEBUG_ASSERT(pScreen);
+-            int dialogWidth = kEstimatedShowDetailedDialogWidth;
+-            int dialogHeight = kEstimatedShowDetailedDialogHeight;
+-
+-            // Limit dialog size to screen size, for the case of devices with very small display - like Raspberry Pi.
+-            if (dialogWidth > pScreen->geometry().width() - 2 * kMinimumDialogMargin) {
+-                dialogWidth = pScreen->geometry().width() - 2 * kMinimumDialogMargin;
+-            }
+-            if (dialogHeight > pScreen->geometry().height() - 2 * kMinimumDialogMargin) {
+-                dialogHeight = pScreen->geometry().height() - 2 * kMinimumDialogMargin;
+-            }
+-            pMsgBox->setGeometry(QStyle::alignedRect(
+-                    Qt::LeftToRight,
+-                    Qt::AlignCenter,
+-                    QSize(dialogWidth, dialogHeight),
+-                    pScreen->geometry()));
+-            pMsgBox->setStyleSheet(
+-                    QString("QTextEdit { min-width: %1px ; max-height: %2px; "
+-                            "font-family: monospace;}")
+-                            .arg(dialogWidth - kEstimatedDialogPadding)
+-                            .arg(dialogHeight));
+-        }
+-    }
+-
+-    while (!props->m_buttons.isEmpty()) {
+-        pMsgBox->addButton(props->m_buttons.takeFirst());
+-    }
+-    pMsgBox->setDefaultButton(props->m_defaultButton);
+-    pMsgBox->setEscapeButton(props->m_escapeButton);
+-    pMsgBox->setModal(props->m_modal);
+-
+-    // This deletes the msgBox automatically, avoiding a memory leak
+-    pMsgBox->setAttribute(Qt::WA_DeleteOnClose, true);
+-    // Without this, QApplication would close Mixxx when closing this
+-    // dialog and using the QML GUI because QApplication only takes
+-    // into account QWidget windows.
+-    pMsgBox->setAttribute(Qt::WA_QuitOnClose, false);
+-
+-    auto locker = lockMutex(&m_mutex);
+-    // To avoid duplicate dialogs on the same error
+-    m_dialogKeys.append(props->m_key);
+-
+-    // Signal mapper calls our slot with the key parameter so it knows which to
+-    // remove from the list
+-    QString key = props->m_key;
+-    connect(pMsgBox,
+-            &QMessageBox::finished,
+-            this,
+-            [this, key, pMsgBox] { boxClosed(key, pMsgBox); });
+-
+-    locker.unlock();
+-
+-    if (props->m_modal) {
+-        // Blocks so the user has a chance to read it before application exit
+-        pMsgBox->exec();
+-    } else {
+-        pMsgBox->show();
++        qWarning().noquote() << "Details:" << props->m_details;
+     }
++    ControlObject::set(ConfigKey("[Library]", "app_error"), 1.0);
+ 
+-    // If critical/fatal, gracefully exit application if possible
++    QString key = props->m_key;
++    {
++        auto locker = lockMutex(&m_mutex);
++        // Unlike the real dialog this replaces, nothing keeps this key "still showing", so
++        // remove it right away: a recurrence of the same error is logged and bannered again
++        // rather than being silently swallowed for the rest of the session.
++        m_dialogKeys.removeOne(key);
++    }
++    // Tell anyone waiting on stdButtonClicked (e.g. ControllerScriptEngineBase, which
++    // otherwise stays silenced on every further controller-script error once the first one
++    // shows) that this error was acknowledged, as if Close had been clicked - never Ignore,
++    // which would silence this key for the rest of the session, and never Retry, which would
++    // reload the controller mapping.
++    emit stdButtonClicked(key, QMessageBox::Close);
++
++    // If critical/fatal, gracefully exit application if possible - immediately, rather than
++    // waiting for a dialog click that will never come, so the kiosk's restart loop
++    // (~/.xinitrc) brings Mixxx back up right away instead of hanging indefinitely.
+     if (props->m_shouldQuit) {
+         m_errorCondition = true;
+         if (QCoreApplication::instance()) {
