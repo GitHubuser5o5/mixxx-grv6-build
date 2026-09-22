@@ -1,0 +1,71 @@
+diff --git a/src/library/trackmodel.h b/src/library/trackmodel.h
+--- a/src/library/trackmodel.h
++++ b/src/library/trackmodel.h
+@@ -225,6 +225,12 @@
+         m_eDefaultSortOrder = sortOrder;
+     }
+ 
++    /// GRV6: when true the view always applies defaultSortColumn()/
++    /// defaultSortOrder() on model load, ignoring any saved header sort state.
++    virtual bool forceDefaultSort() const {
++        return false;
++    }
++
+     virtual bool isColumnSortable(int column) const {
+         Q_UNUSED(column);
+         return true;
+diff --git a/src/widget/wtracktableview.cpp b/src/widget/wtracktableview.cpp
+--- a/src/widget/wtracktableview.cpp
++++ b/src/widget/wtracktableview.cpp
+@@ -178,6 +178,13 @@
+     // If the model has not changed there's no need to exchange the headers
+     // which would cause a small GUI freeze
+     if (getTrackModel() == pTrackModel) {
++        if (m_sorting && pTrackModel->forceDefaultSort()) {
++            // GRV6: reassert the model's default sort (e.g. rekordbox # asc)
++            // instead of whatever the header last remembered.
++            horizontalHeader()->setSortIndicator(
++                    pTrackModel->defaultSortColumn(),
++                    pTrackModel->defaultSortOrder());
++        }
+         // Re-sort the table even if the track model is the same. This triggers
+         // a select() if the table is dirty.
+         doSortByColumn(horizontalHeader()->sortIndicatorSection(),
+@@ -286,7 +293,8 @@
+         TrackModel::SortColumnId sortColumn =
+                 pTrackModel->sortColumnIdFromColumnIndex(
+                         horizontalHeader()->sortIndicatorSection());
+-        if (sortColumn != TrackModel::SortColumnId::Invalid) {
++        if (sortColumn != TrackModel::SortColumnId::Invalid &&
++                !pTrackModel->forceDefaultSort()) {
+             // Sort by the saved sort section and order.
+             sortOrder = horizontalHeader()->sortIndicatorOrder();
+         } else {
+diff --git a/src/library/rekordbox/rekordboxfeature.h b/src/library/rekordbox/rekordboxfeature.h
+--- a/src/library/rekordbox/rekordboxfeature.h
++++ b/src/library/rekordbox/rekordboxfeature.h
+@@ -48,6 +48,10 @@
+     TrackPointer getTrack(const QModelIndex& index) const override;
+     bool isColumnHiddenByDefault(int column) override;
+     bool isColumnInternal(int column) override;
++    // GRV6: always come up sorted by # (playlist position) ascending,
++    // regardless of any saved header sort state - setPlaylist() (in the base
++    // class) already sets that as the default sort.
++    bool forceDefaultSort() const override;
+ 
+   protected:
+     void initSortColumnMapping() override;
+diff --git a/src/library/rekordbox/rekordboxfeature.cpp b/src/library/rekordbox/rekordboxfeature.cpp
+--- a/src/library/rekordbox/rekordboxfeature.cpp
++++ b/src/library/rekordbox/rekordboxfeature.cpp
+@@ -1363,6 +1363,10 @@
+                   trackSource) {
+ }
+ 
++bool RekordboxPlaylistModel::forceDefaultSort() const {
++    return true;
++}
++
+ void RekordboxPlaylistModel::initSortColumnMapping() {
+     // Add a bijective mapping between the SortColumnIds and column indices
+     for (int i = 0; i < static_cast<int>(TrackModel::SortColumnId::IdMax); ++i) {

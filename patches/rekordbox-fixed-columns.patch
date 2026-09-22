@@ -1,0 +1,194 @@
+diff --git a/src/library/trackmodel.h b/src/library/trackmodel.h
+--- a/src/library/trackmodel.h
++++ b/src/library/trackmodel.h
+@@ -231,6 +231,13 @@
+         return false;
+     }
+ 
++    /// GRV6: when true the view lays the visible columns out as
++    /// #, Title, Artist, Key, Duration with proportional widths that fill
++    /// the viewport (see WTrackTableView::applyFixedColumnWidths).
++    virtual bool fixedColumnLayout() const {
++        return false;
++    }
++
+     virtual bool isColumnSortable(int column) const {
+         Q_UNUSED(column);
+         return true;
+diff --git a/src/widget/wtracktableview.h b/src/widget/wtracktableview.h
+--- a/src/widget/wtracktableview.h
++++ b/src/widget/wtracktableview.h
+@@ -162,6 +162,10 @@
+ 
+     void initTrackMenu();
+ 
++    // GRV6: proportional column widths + visual order for models with a
++    // fixed appliance column layout (#, Title, Artist, Key, Duration).
++    void applyFixedColumnWidths();
++
+     void hideOrRemoveSelectedTracks();
+ 
+     const UserSettingsPointer m_pConfig;
+diff --git a/src/widget/wtracktableview.cpp b/src/widget/wtracktableview.cpp
+--- a/src/widget/wtracktableview.cpp
++++ b/src/widget/wtracktableview.cpp
+@@ -1,6 +1,8 @@
+ #include "widget/wtracktableview.h"
+ 
+ #include <QDrag>
++#include <QFontMetrics>
++#include <QHeaderView>
+ #include <QModelIndex>
+ #include <QScrollBar>
+ #include <QShortcut>
+@@ -343,6 +345,11 @@
+     // haven't been able to get it to stop us from using a model as a drag
+     // target though, so my hacks above may not be completely unjustified.
+ 
++    // GRV6: fixed appliance column layout for rekordbox views - the last
++    // visual column (Duration) stretches to the right edge.
++    horizontalHeader()->setStretchLastSection(pTrackModel->fixedColumnLayout());
++    applyFixedColumnWidths();
++
+     setVisible(true);
+ 
+     // trigger restoring scrollBar position, selection etc.
+@@ -352,6 +359,59 @@
+     initTrackMenu();
+ }
+ 
++void WTrackTableView::applyFixedColumnWidths() {
++    TrackModel* pTrackModel = getTrackModel();
++    if (!pTrackModel || !pTrackModel->fixedColumnLayout()) {
++        return;
++    }
++    const int posColumn = pTrackModel->fieldIndex(QStringLiteral("position"));
++    const int artistColumn = pTrackModel->fieldIndex(QStringLiteral("artist"));
++    const int titleColumn = pTrackModel->fieldIndex(QStringLiteral("title"));
++    const int keyColumn = pTrackModel->fieldIndex(QStringLiteral("key"));
++    const int durationColumn = pTrackModel->fieldIndex(QStringLiteral("duration"));
++    if (posColumn < 0 || artistColumn < 0 || titleColumn < 0 ||
++            keyColumn < 0 || durationColumn < 0) {
++        return;
++    }
++
++    // Visual order: #, Title, Artist, Key, Duration.
++    QHeaderView* pHeader = horizontalHeader();
++    const int logicalOrder[] = {
++            posColumn, titleColumn, artistColumn, keyColumn, durationColumn};
++    int visualTarget = 0;
++    for (const int logical : logicalOrder) {
++        const int visual = pHeader->visualIndex(logical);
++        if (visual >= 0 && visual != visualTarget) {
++            pHeader->moveSection(visual, visualTarget);
++        }
++        ++visualTarget;
++    }
++
++    const int viewportWidth = viewport()->width();
++    if (viewportWidth <= 0) {
++        return;
++    }
++    const QFontMetrics metrics(font());
++    // Content-sized columns: # plus sort arrow, key names, m:ss durations.
++    const int posWidth = metrics.horizontalAdvance(QStringLiteral("9999")) + 24;
++    const int keyWidth = metrics.horizontalAdvance(QStringLiteral("A#m")) + 24;
++    const int durationWidth =
++            metrics.horizontalAdvance(QStringLiteral("88:88")) + 16;
++    int remaining = viewportWidth - posWidth - keyWidth - durationWidth;
++    if (remaining < 120) {
++        remaining = 120;
++    }
++    // Artist/Title share the rest 40/60.
++    const int artistWidth = remaining * 2 / 5;
++    const int titleWidth = remaining - artistWidth;
++    setColumnWidth(posColumn, posWidth);
++    setColumnWidth(titleColumn, titleWidth);
++    setColumnWidth(artistColumn, artistWidth);
++    setColumnWidth(keyColumn, keyWidth);
++    // durationColumn is the last visual section and stretches to fill
++    // the remaining width (setStretchLastSection in loadTrackModel).
++}
++
+ void WTrackTableView::initTrackMenu() {
+     auto* pTrackModel = getTrackModel();
+     DEBUG_ASSERT(pTrackModel);
+@@ -1170,9 +1230,11 @@
+ 
+     if (newHeight >= oldHeight) {
+         // GRV6: route through WLibraryTableView so the visible-rows zoom
+-        // (see WLibraryTableView::setTrackTableVisibleRows) tracks the new
+-        // viewport size; it is otherwise unreachable from this subclass.
++        // (see WLibraryTableView::setTrackTableVisibleRows) and the fixed
++        // column layout track the new viewport size; otherwise unreachable
++        // from this subclass.
+         WLibraryTableView::resizeEvent(event);
++        applyFixedColumnWidths();
+         return;
+     }
+ 
+@@ -1182,6 +1244,7 @@
+ 
+     if (currRow < 0 || rHeight == 0) { // true if currIndex is invalid
+         WLibraryTableView::resizeEvent(event);
++        applyFixedColumnWidths();
+         return;
+     }
+ 
+@@ -1193,6 +1256,7 @@
+ 
+     // GRV6: see the comment above.
+     WLibraryTableView::resizeEvent(event);
++    applyFixedColumnWidths();
+ 
+     if (!rowWasVisible) {
+         return;
+diff --git a/src/library/rekordbox/rekordboxfeature.h b/src/library/rekordbox/rekordboxfeature.h
+--- a/src/library/rekordbox/rekordboxfeature.h
++++ b/src/library/rekordbox/rekordboxfeature.h
+@@ -52,6 +52,10 @@
+     // regardless of any saved header sort state - setPlaylist() (in the base
+     // class) already sets that as the default sort.
+     bool forceDefaultSort() const override;
++    // GRV6: lay the visible columns out as #, Title, Artist, Key, Duration
++    // with proportional widths that fill the viewport (see
++    // WTrackTableView::applyFixedColumnWidths).
++    bool fixedColumnLayout() const override;
+ 
+   protected:
+     void initSortColumnMapping() override;
+diff --git a/src/library/rekordbox/rekordboxfeature.cpp b/src/library/rekordbox/rekordboxfeature.cpp
+--- a/src/library/rekordbox/rekordboxfeature.cpp
++++ b/src/library/rekordbox/rekordboxfeature.cpp
+@@ -1555,15 +1555,25 @@
+ }
+ 
+ bool RekordboxPlaylistModel::isColumnHiddenByDefault(int column) {
+-    if (column == fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_BITRATE)) {
+-        return true;
+-    }
+-    return BaseSqlTableModel::isColumnHiddenByDefault(column);
++    Q_UNUSED(column);
++    // GRV6: the visible column set is fixed via isColumnInternal() below.
++    return false;
+ }
+ 
+ bool RekordboxPlaylistModel::isColumnInternal(int column) {
+-    return column == fieldIndex(ColumnCache::COLUMN_REKORDBOX_ANALYZE_PATH) ||
+-            BaseExternalPlaylistModel::isColumnInternal(column);
++    // GRV6: fixed appliance column set - #, Title, Artist, Key, Duration.
++    if (column == fieldIndex(ColumnCache::COLUMN_PLAYLISTTRACKSTABLE_POSITION) ||
++            column == fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_TITLE) ||
++            column == fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_ARTIST) ||
++            column == fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_KEY) ||
++            column == fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_DURATION)) {
++        return false;
++    }
++    return true;
++}
++
++bool RekordboxPlaylistModel::fixedColumnLayout() const {
++    return true;
+ }
+ 
+ RekordboxFeature::RekordboxFeature(

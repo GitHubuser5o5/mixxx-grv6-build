@@ -1,0 +1,279 @@
+diff --git a/src/library/library.h b/src/library/library.h
+--- a/src/library/library.h
++++ b/src/library/library.h
+@@ -82,6 +82,14 @@
+         return m_iTrackTableRowHeight;
+     }
+ 
++    // GRV6: > 0 means row height and font are derived from the viewport so
++    // exactly this many rows fit (a live zoom); 0 = off, falls back to
++    // getTrackTableRowHeight()/getTrackTableFont(). Live-settable via
++    // [Library],grv6_visible_rows (see the ControlObject below).
++    int getTrackTableVisibleRows() const {
++        return m_iTrackTableVisibleRows;
++    }
++
+     const QFont& getTrackTableFont() const {
+         return m_trackTableFont;
+     }
+@@ -93,9 +101,11 @@
+     //static Library* buildDefaultLibrary();
+ 
+     static const int kDefaultRowHeightPx;
++    static const int kDefaultVisibleRows;
+ 
+     void setFont(const QFont& font);
+     void setRowHeight(int rowHeight);
++    void setVisibleRows(int visibleRows);
+     void setEditMetadataSelectedClick(bool enable);
+ 
+     /// Triggers a new search in the internal track collection
+@@ -146,11 +156,15 @@
+ 
+     void setTrackTableFont(const QFont& font);
+     void setTrackTableRowHeight(int rowHeight);
++    void setTrackTableVisibleRows(int visibleRows);
+     void setSelectedClick(bool enable);
+ 
+   private slots:
+       void onPlayerManagerTrackAnalyzerProgress(TrackId trackId, AnalyzerProgress analyzerProgress);
+       void onPlayerManagerTrackAnalyzerIdle();
++      // GRV6: [Library],grv6_visible_rows was written externally (e.g. a
++      // controller script driving a live library zoom); clamp and apply it.
++      void slotVisibleRowsControlChanged(double value);
+ 
+   private:
+     const UserSettingsPointer m_pConfig;
+@@ -174,6 +188,8 @@
+     BrowseFeature* m_pBrowseFeature;
+     QFont m_trackTableFont;
+     int m_iTrackTableRowHeight;
++    int m_iTrackTableVisibleRows;
+     bool m_editMetadataSelectedClick;
+     QScopedPointer<ControlObject> m_pKeyNotation;
++    QScopedPointer<ControlObject> m_pVisibleRowsControl;
+ };
+diff --git a/src/library/library.cpp b/src/library/library.cpp
+--- a/src/library/library.cpp
++++ b/src/library/library.cpp
+@@ -4,6 +4,8 @@
+ #include <QDir>
+ #include <QMessageBox>
+ 
++#include <algorithm>
++
+ #include "control/controlobject.h"
+ #include "controllers/keyboard/keyboardeventfilter.h"
+ #include "library/analysis/analysisfeature.h"
+@@ -56,6 +58,10 @@
+ // The default row height of the library.
+ const int Library::kDefaultRowHeightPx = 20;
+ 
++// GRV6: default number of tracks visible in the library table (0 = off, falls
++// back to the manual RowHeight/Font settings).
++const int Library::kDefaultVisibleRows = 8;
++
+ Library::Library(
+         QObject* parent,
+         UserSettingsPointer pConfig,
+@@ -242,6 +248,18 @@
+ 
+     m_iTrackTableRowHeight = m_pConfig->getValue(
+             ConfigKey(kConfigGroup, "RowHeight"), kDefaultRowHeightPx);
++    m_iTrackTableVisibleRows = m_pConfig->getValue(
++            ConfigKey(kConfigGroup, "VisibleRows"), kDefaultVisibleRows);
++
++    // GRV6: live library zoom, e.g. driven by a controller script (shift+browse
++    // knob). connectValueChangeRequest clamps and applies every write, so the
++    // CO's own value always reflects what actually took effect.
++    m_pVisibleRowsControl.reset(new ControlObject(
++            ConfigKey(kConfigGroup, QStringLiteral("grv6_visible_rows"))));
++    m_pVisibleRowsControl->connectValueChangeRequest(
++            this, &Library::slotVisibleRowsControlChanged, Qt::DirectConnection);
++    m_pVisibleRowsControl->setAndConfirm(m_iTrackTableVisibleRows);
++
+     QString fontStr =
+             m_pConfig->getValueString(ConfigKey(kConfigGroup, "Font"));
+     if (!fontStr.isEmpty()) {
+@@ -437,6 +455,10 @@
+             pTrackTableView,
+             &WTrackTableView::setTrackTableRowHeight);
+     connect(this,
++            &Library::setTrackTableVisibleRows,
++            pTrackTableView,
++            &WTrackTableView::setTrackTableVisibleRows);
++    connect(this,
+             &Library::setSelectedClick,
+             pTrackTableView,
+             &WTrackTableView::setSelectedClick);
+@@ -460,6 +482,7 @@
+     // just connected to us.
+     emit setTrackTableFont(m_trackTableFont);
+     emit setTrackTableRowHeight(m_iTrackTableRowHeight);
++    emit setTrackTableVisibleRows(m_iTrackTableVisibleRows);
+     emit setSelectedClick(m_editMetadataSelectedClick);
+ }
+ 
+@@ -712,6 +735,21 @@
+     emit setTrackTableRowHeight(rowHeight);
+ }
+ 
++void Library::setVisibleRows(int visibleRows) {
++    m_iTrackTableVisibleRows = visibleRows;
++    emit setTrackTableVisibleRows(visibleRows);
++}
++
++void Library::slotVisibleRowsControlChanged(double value) {
++    // 0 (off) is valid too - see getTrackTableVisibleRows()'s doc comment.
++    const int visibleRows = std::clamp(static_cast<int>(value), 0, 20);
++    setVisibleRows(visibleRows);
++    // Reflects the clamped value back, and re-confirms the CO's own value even
++    // when a rejected write (out of range, or a no-op repeat) would otherwise
++    // leave it unconfirmed.
++    m_pVisibleRowsControl->setAndConfirm(visibleRows);
++}
++
+ void Library::setEditMetadataSelectedClick(bool enabled) {
+     m_editMetadataSelectedClick = enabled;
+     emit setSelectedClick(enabled);
+diff --git a/src/widget/wlibrarytableview.h b/src/widget/wlibrarytableview.h
+--- a/src/widget/wlibrarytableview.h
++++ b/src/widget/wlibrarytableview.h
+@@ -10,6 +10,7 @@
+ #include "track/track_decl.h"
+ 
+ class QFont;
++class QResizeEvent;
+ 
+ class WLibraryTableView : public QTableView, public virtual LibraryView {
+     Q_OBJECT
+@@ -65,10 +66,14 @@
+   public slots:
+     void setTrackTableFont(const QFont& font);
+     void setTrackTableRowHeight(int rowHeight);
++    // GRV6: > 0 means row height and font are derived from the viewport so
++    // exactly this many rows fit; 0 = manual sizing via the two slots above.
++    void setTrackTableVisibleRows(int visibleRows);
+     void setSelectedClick(bool enable);
+ 
+   protected:
+     void focusInEvent(QFocusEvent* event) override;
++    void resizeEvent(QResizeEvent* event) override;
+     QModelIndex moveCursor(CursorAction cursorAction,
+             Qt::KeyboardModifiers modifiers) override;
+     virtual QString getModelStateKey() const = 0;
+@@ -77,6 +82,13 @@
+     int m_prevColumn;
+ 
+   private:
++    void applyFont(const QFont& font);
++    void applyVisibleRows();
++
+     const UserSettingsPointer m_pConfig;
+     QCache<QString, ModelState> m_modelStateCache;
++    // GRV6 visible-rows zoom state (see setTrackTableVisibleRows).
++    int m_visibleRows = 0;
++    int m_manualRowHeight = 20;
++    QFont m_baseTrackTableFont;
+ };
+diff --git a/src/widget/wlibrarytableview.cpp b/src/widget/wlibrarytableview.cpp
+--- a/src/widget/wlibrarytableview.cpp
++++ b/src/widget/wlibrarytableview.cpp
+@@ -171,6 +171,15 @@
+ }
+ 
+ void WLibraryTableView::setTrackTableFont(const QFont& font) {
++    m_baseTrackTableFont = font;
++    if (m_visibleRows > 0) {
++        applyVisibleRows();
++    } else {
++        applyFont(font);
++    }
++}
++
++void WLibraryTableView::applyFont(const QFont& font) {
+     setFont(font);
+     QFontMetrics metrics(font);
+     verticalHeader()->setMinimumSectionSize(metrics.height());
+@@ -188,10 +197,47 @@
+ }
+ 
+ void WLibraryTableView::setTrackTableRowHeight(int rowHeight) {
++    m_manualRowHeight = rowHeight;
++    if (m_visibleRows > 0) {
++        // Row height is derived from the viewport in visible-rows mode.
++        return;
++    }
+     verticalHeader()->setDefaultSectionSize(math_max(
+             rowHeight, verticalHeader()->minimumSectionSize()));
+ }
+ 
++void WLibraryTableView::setTrackTableVisibleRows(int visibleRows) {
++    m_visibleRows = visibleRows;
++    if (m_visibleRows > 0) {
++        applyVisibleRows();
++    } else {
++        applyFont(m_baseTrackTableFont);
++        verticalHeader()->setDefaultSectionSize(math_max(
++                m_manualRowHeight, verticalHeader()->minimumSectionSize()));
++    }
++}
++
++void WLibraryTableView::applyVisibleRows() {
++    if (m_visibleRows <= 0) {
++        return;
++    }
++    const int viewportHeight = viewport()->height();
++    if (viewportHeight <= 0) {
++        // Not laid out yet; resizeEvent() will retry.
++        return;
++    }
++    const int rowHeight = math_max(8, viewportHeight / m_visibleRows);
++    QFont font = m_baseTrackTableFont;
++    font.setPixelSize(math_max(8, static_cast<int>(rowHeight * 0.45)));
++    applyFont(font);
++    verticalHeader()->setDefaultSectionSize(rowHeight);
++}
++
++void WLibraryTableView::resizeEvent(QResizeEvent* event) {
++    QTableView::resizeEvent(event);
++    applyVisibleRows();
++}
++
+ void WLibraryTableView::setSelectedClick(bool enable) {
+     if (enable) {
+         setEditTriggers(QAbstractItemView::SelectedClicked|QAbstractItemView::EditKeyPressed);
+diff --git a/src/widget/wtracktableview.cpp b/src/widget/wtracktableview.cpp
+--- a/src/widget/wtracktableview.cpp
++++ b/src/widget/wtracktableview.cpp
+@@ -1161,7 +1161,10 @@
+     int newHeight = event->size().height();
+ 
+     if (newHeight >= oldHeight) {
+-        QTableView::resizeEvent(event);
++        // GRV6: route through WLibraryTableView so the visible-rows zoom
++        // (see WLibraryTableView::setTrackTableVisibleRows) tracks the new
++        // viewport size; it is otherwise unreachable from this subclass.
++        WLibraryTableView::resizeEvent(event);
+         return;
+     }
+ 
+@@ -1170,7 +1173,7 @@
+     int rHeight = rowHeight(currRow);
+ 
+     if (currRow < 0 || rHeight == 0) { // true if currIndex is invalid
+-        QTableView::resizeEvent(event);
++        WLibraryTableView::resizeEvent(event);
+         return;
+     }
+ 
+@@ -1180,7 +1183,8 @@
+     // Note: don't use viewport()->height() because that may already have changed
+     bool rowWasVisible = posInView > 0 && posInView - rHeight < oldHeight;
+ 
+-    QTableView::resizeEvent(event);
++    // GRV6: see the comment above.
++    WLibraryTableView::resizeEvent(event);
+ 
+     if (!rowWasVisible) {
+         return;

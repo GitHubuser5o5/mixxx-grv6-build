@@ -1,0 +1,58 @@
+diff --git a/src/library/rekordbox/rekordboxfeature.cpp b/src/library/rekordbox/rekordboxfeature.cpp
+--- a/src/library/rekordbox/rekordboxfeature.cpp
++++ b/src/library/rekordbox/rekordboxfeature.cpp
+@@ -15,6 +15,7 @@
+ #include <QTextCodec>
+ #include <QtDebug>
+ 
++#include "control/controlobject.h"
+ #include "engine/engine.h"
+ #include "library/dao/trackschema.h"
+ #include "library/library.h"
+@@ -1732,6 +1733,12 @@
+ void RekordboxFeature::activate() {
+     qDebug() << "RekordboxFeature::activate()";
+ 
++    // GRV6: [Library],grv6_rekordbox_busy - created by the skin like every other
++    // GRV6 skin control (see GRV6/SKIN-NOTES.md); a no-op on stock Mixxx or any
++    // skin that never declared it. Lets a skin show a loading spinner instead of
++    // an unresponsive-looking Browse view while the device scan below runs.
++    ControlObject::set(ConfigKey("[Library]", "grv6_rekordbox_busy"), 1.0);
++
+     // Let a worker thread do the XML parsing
+     m_devicesFuture = QtConcurrent::run(findRekordboxDevices);
+     m_devicesFutureWatcher.setFuture(m_devicesFuture);
+@@ -1786,6 +1793,11 @@
+         data[1] = QVariant(IS_NOT_RECORDBOX_DEVICE);
+         item->setData(QVariant(data));
+ 
++        // GRV6: see the matching set(0.0) at the top of onTracksFound(). This is
++        // usually the slower of the two phases (parses the device's whole
++        // exported database), so it is the one most worth a loading spinner for.
++        ControlObject::set(ConfigKey("[Library]", "grv6_rekordbox_busy"), 1.0);
++
+         // Let a worker thread do the XML parsing
+         m_tracksFuture = QtConcurrent::run(parseDeviceDB, static_cast<Library*>(parent())->dbConnectionPool(), item);
+         m_tracksFutureWatcher.setFuture(m_tracksFuture);
+@@ -1797,6 +1809,10 @@
+ }
+ 
+ void RekordboxFeature::onRekordboxDevicesFound() {
++    // GRV6: the device-scan worker has finished (successfully or not) by the
++    // time this slot runs - see the matching set(1.0) in activate().
++    ControlObject::set(ConfigKey("[Library]", "grv6_rekordbox_busy"), 0.0);
++
+     const QList<TreeItem*> result = m_devicesFuture.result();
+     auto foundDevices = std::vector<std::unique_ptr<TreeItem>>(result.cbegin(), result.cend());
+ 
+@@ -1874,6 +1890,10 @@
+ 
+ void RekordboxFeature::onTracksFound() {
+     qDebug() << "onTracksFound";
++    // GRV6: the parse worker has finished (successfully or not, see the catch
++    // below) by the time this slot runs - see the matching set(1.0) in
++    // activateChild().
++    ControlObject::set(ConfigKey("[Library]", "grv6_rekordbox_busy"), 0.0);
+     m_pSidebarModel->triggerRepaint();
+ 
+     QString devicePlaylist;

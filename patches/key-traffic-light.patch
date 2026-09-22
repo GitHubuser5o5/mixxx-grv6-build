@@ -1,0 +1,254 @@
+diff --git a/src/library/basetracktablemodel.h b/src/library/basetracktablemodel.h
+--- a/src/library/basetracktablemodel.h
++++ b/src/library/basetracktablemodel.h
+@@ -19,7 +19,7 @@
+             QObject* parent,
+             TrackCollectionManager* const pTrackCollectionManager,
+             const char* settingsNamespace);
+-    ~BaseTrackTableModel() override = default;
++    ~BaseTrackTableModel() override;
+ 
+     ///////////////////////////////////////////////////////
+     //  Overridable functions
+diff --git a/src/library/basetracktablemodel.cpp b/src/library/basetracktablemodel.cpp
+--- a/src/library/basetracktablemodel.cpp
++++ b/src/library/basetracktablemodel.cpp
+@@ -1,10 +1,17 @@
+ #include "library/basetracktablemodel.h"
+ 
+ #include <QBuffer>
++#include <QDateTime>
+ #include <QGuiApplication>
+ #include <QMimeData>
+ #include <QScreen>
++#include <QSet>
+ 
++#include <functional>
++#include <memory>
++
++#include "control/controlobject.h"
++#include "control/controlproxy.h"
+ #include "library/coverartcache.h"
+ #include "library/dao/trackschema.h"
+ #include "library/starrating.h"
+@@ -21,6 +28,7 @@
+ #include "mixer/playerinfo.h"
+ #include "mixer/playermanager.h"
+ #include "moc_basetracktablemodel.cpp"
++#include "track/keyutils.h"
+ #include "track/track.h"
+ #include "util/assert.h"
+ #include "util/clipboard.h"
+@@ -95,6 +103,144 @@
+             pTrackCollectionManager->internalCollection()->database());
+ }
+ 
++// GRV6 traffic-light: tracks the "master" deck for key-compatibility
++// highlighting. Master = the currently playing deck that started playing
++// most recently (i.e. has been playing for the least wall-clock time).
++// No deck playing -> no master -> no highlighting.
++class XdjMasterKeyTracker {
++  public:
++    static XdjMasterKeyTracker& instance() {
++        static XdjMasterKeyTracker s_instance;
++        return s_instance;
++    }
++
++    void registerModel(QObject* pModel, std::function<void()> refresh) {
++        ensureInitialized();
++        m_models.append(qMakePair(pModel, std::move(refresh)));
++    }
++
++    void unregisterModel(QObject* pModel) {
++        for (int i = m_models.size() - 1; i >= 0; --i) {
++            if (m_models.at(i).first == pModel) {
++                m_models.removeAt(i);
++            }
++        }
++    }
++
++    bool isCompatibleKeyText(const QString& keyText) const {
++        if (m_compatibleKeys.isEmpty() || keyText.isEmpty()) {
++            return false;
++        }
++        const mixxx::track::io::key::ChromaticKey key =
++                KeyUtils::guessKeyFromText(keyText);
++        if (key == mixxx::track::io::key::INVALID) {
++            return false;
++        }
++        return m_compatibleKeys.contains(static_cast<int>(key));
++    }
++
++  private:
++    static constexpr int kMaxDecks = 4;
++
++    struct DeckState {
++        std::unique_ptr<ControlProxy> pPlay;
++        QString group;
++        qint64 playStartMs = -1;
++        bool playing = false;
++    };
++
++    XdjMasterKeyTracker() = default;
++
++    void ensureInitialized() {
++        if (m_initialized) {
++            return;
++        }
++        m_initialized = true;
++        m_pContext = std::make_unique<QObject>();
++        for (int i = 0; i < kMaxDecks; ++i) {
++            const QString group = QStringLiteral("[Channel%1]").arg(i + 1);
++            const ConfigKey playKey(group, QStringLiteral("play"));
++            if (!ControlObject::exists(playKey)) {
++                continue;
++            }
++            auto& deck = m_decks[i];
++            deck.group = group;
++            deck.pPlay = std::make_unique<ControlProxy>(playKey, m_pContext.get());
++            deck.pPlay->connectValueChanged(m_pContext.get(), [this, i](double v) {
++                onPlayChanged(i, v > 0);
++            });
++            deck.playing = deck.pPlay->toBool();
++            if (deck.playing) {
++                deck.playStartMs = QDateTime::currentMSecsSinceEpoch();
++            }
++        }
++        QObject::connect(&PlayerInfo::instance(),
++                &PlayerInfo::trackChanged,
++                m_pContext.get(),
++                [this](const QString& group, TrackPointer, TrackPointer) {
++                    if (group == m_masterGroup) {
++                        updateMaster();
++                    }
++                });
++        updateMaster();
++    }
++
++    void onPlayChanged(int deckIndex, bool playing) {
++        auto& deck = m_decks[deckIndex];
++        if (playing && !deck.playing) {
++            deck.playStartMs = QDateTime::currentMSecsSinceEpoch();
++        }
++        deck.playing = playing;
++        updateMaster();
++    }
++
++    void updateMaster() {
++        // Master = playing deck with the latest start time.
++        QString masterGroup;
++        qint64 latestStart = -1;
++        for (const auto& deck : m_decks) {
++            if (deck.playing && deck.playStartMs > latestStart) {
++                latestStart = deck.playStartMs;
++                masterGroup = deck.group;
++            }
++        }
++        m_masterGroup = masterGroup;
++
++        QSet<int> compatible;
++        if (!masterGroup.isEmpty()) {
++            const TrackPointer pTrack =
++                    PlayerInfo::instance().getTrackInfo(masterGroup);
++            if (pTrack) {
++                mixxx::track::io::key::ChromaticKey key = pTrack->getKey();
++                if (key == mixxx::track::io::key::INVALID) {
++                    key = KeyUtils::guessKeyFromText(pTrack->getKeyText());
++                }
++                if (key != mixxx::track::io::key::INVALID) {
++                    const QList<mixxx::track::io::key::ChromaticKey> keys =
++                            KeyUtils::getCompatibleKeys(key);
++                    for (const auto compatibleKey : keys) {
++                        compatible.insert(static_cast<int>(compatibleKey));
++                    }
++                }
++            }
++        }
++        if (compatible == m_compatibleKeys) {
++            return;
++        }
++        m_compatibleKeys = compatible;
++        for (const auto& entry : std::as_const(m_models)) {
++            entry.second();
++        }
++    }
++
++    bool m_initialized = false;
++    std::unique_ptr<QObject> m_pContext;
++    DeckState m_decks[kMaxDecks];
++    QString m_masterGroup;
++    QSet<int> m_compatibleKeys;
++    QList<QPair<QObject*, std::function<void()>>> m_models;
++};
++
+ } // anonymous namespace
+ 
+ // static
+@@ -154,6 +300,21 @@
+                 this,
+                 &BaseTrackTableModel::slotCoverFound);
+     }
++    XdjMasterKeyTracker::instance().registerModel(this, [this] {
++        // GRV6: repaint the key column's traffic-light backgrounds.
++        const int rows = rowCount();
++        const int columns = columnCount();
++        if (rows > 0 && columns > 0) {
++            emit dataChanged(
++                    index(0, 0),
++                    index(rows - 1, columns - 1),
++                    {Qt::BackgroundRole});
++        }
++    });
++}
++
++BaseTrackTableModel::~BaseTrackTableModel() {
++    XdjMasterKeyTracker::instance().unregisterModel(this);
+ }
+ 
+ void BaseTrackTableModel::initTableColumnsAndHeaderProperties(
+@@ -520,6 +681,19 @@
+     }
+ 
+     if (role == Qt::BackgroundRole) {
++        if (mapColumn(index.column()) == ColumnCache::COLUMN_LIBRARYTABLE_KEY) {
++            // GRV6 traffic-light: key cell is green when compatible with the
++            // master deck's key, otherwise unpainted (never the row color).
++            const QVariant composedKey = KeyUtils::keyFromKeyTextAndIdFields(
++                    rawValue(index),
++                    rawSiblingValue(index,
++                            ColumnCache::COLUMN_LIBRARYTABLE_KEY_ID));
++            if (XdjMasterKeyTracker::instance().isCompatibleKeyText(
++                        composedKey.toString())) {
++                return QBrush(QColor(0, 179, 74, 200));
++            }
++            return QVariant();
++        }
+         const auto rgbColorValue = rawSiblingValue(
+                 index,
+                 ColumnCache::COLUMN_LIBRARYTABLE_COLOR);
+@@ -872,12 +1046,23 @@
+                 }
+             }
+         }
+-        case ColumnCache::COLUMN_LIBRARYTABLE_KEY:
++        case ColumnCache::COLUMN_LIBRARYTABLE_KEY: {
+             // The Key value is determined by either the KEY_ID or KEY column
+-            return KeyUtils::keyFromKeyTextAndIdFields(
++            const QVariant composedKey = KeyUtils::keyFromKeyTextAndIdFields(
+                     rawValue,
+                     rawSiblingValue(
+                             index, ColumnCache::COLUMN_LIBRARYTABLE_KEY_ID));
++            // GRV6: always display musical note names, never Camelot numbers,
++            // regardless of the user's Key notation preference - matches the
++            // traffic-light compatibility check, which also reads note names.
++            const mixxx::track::io::key::ChromaticKey guessedKey =
++                    KeyUtils::guessKeyFromText(composedKey.toString());
++            if (guessedKey != mixxx::track::io::key::INVALID) {
++                return KeyUtils::keyToString(guessedKey,
++                        KeyUtils::KeyNotation::Traditional);
++            }
++            return composedKey;
++        }
+         case ColumnCache::COLUMN_LIBRARYTABLE_REPLAYGAIN: {
+             if (rawValue.isNull()) {
+                 return QVariant();
