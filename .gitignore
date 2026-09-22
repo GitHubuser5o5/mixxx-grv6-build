@@ -1,2 +1,5 @@
 src/
 work/
+stable2/
+*.zip
+*.deb

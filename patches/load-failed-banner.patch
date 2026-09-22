@@ -1,0 +1,63 @@
+Description: Replace the modal "Couldn't load track" dialog with a skin control
+ This kiosk build has no keyboard, mouse or touchscreen attached. Stock
+ Mixxx's BaseTrackPlayer::slotLoadFailed() shows a modal QMessageBox that
+ blocks the GUI event loop until it is clicked - with nothing to click it
+ with, a failed load (e.g. loading a track whose USB stick has been pulled)
+ would hang the kiosk until Mixxx is restarted.
+ .
+ This logs the failure with qWarning() instead and raises a new
+ [Library],load_error control (created by the skin, like every other
+ [Skin]/[Library] control this build's skin defines). The skin shows it as a
+ banner, and a controller button clears it with an ordinary ControlObject
+ write, the same mechanism already used elsewhere in this skin. The existing
+ per-track dedup (so repeated Load presses on the same broken track do not
+ re-trigger this every time) is kept as-is.
+ .
+ slotTrackLoaded's success path also clears load_error whenever any load
+ succeeds, as a safety net independent of the controller binding, so the
+ banner can never get stuck showing once the problem is actually gone.
+Author: GRV6 build (local)
+Forwarded: no
+
+diff --git a/src/mixer/basetrackplayer.cpp b/src/mixer/basetrackplayer.cpp
+--- a/src/mixer/basetrackplayer.cpp
++++ b/src/mixer/basetrackplayer.cpp
+@@ -556,16 +556,21 @@
+     m_pChannelToCloneFrom = nullptr;
+ 
+     // Alert user.
+-    // The QMessageBox blocks the event loop (and the GUI since it's modal dialog),
+-    // though if a controller's Load button was pressed repeatedly we may get
+-    // multiple identical messages for the same track.
+-    // Avoid this and show only one message per track track at a time.
++    // GRV6 kiosk build: no keyboard/mouse/touchscreen is attached, so a modal
++    // QMessageBox (which blocks the GUI event loop until it is clicked) could
++    // only ever be dismissed by restarting Mixxx. Log the failure instead and
++    // raise [Library],load_error, which the skin can show as a banner and a
++    // controller button can clear with an ordinary ControlObject write - see
++    // SKIN-NOTES.md. If a controller's Load button was pressed repeatedly we
++    // may get multiple identical failures for the same track; only bump the
++    // control once per track at a time, same as the dialog used to.
+     if (pTrack && m_pPrevFailedTrackId == pTrack->getId()) {
+         return;
+     } else if (pTrack) {
+         m_pPrevFailedTrackId = pTrack->getId();
+     }
+-    QMessageBox::warning(nullptr, tr("Couldn't load track."), reason);
++    qWarning() << "Track load failed:" << reason;
++    ControlObject::set(ConfigKey("[Library]", "load_error"), 1.0);
+     m_pPrevFailedTrackId = TrackId();
+ }
+ 
+@@ -665,6 +670,11 @@
+             }
+         }
+ 
++        // A load just succeeded somewhere: clear the load-error banner (see
++        // slotLoadFailed above) as a safety net independent of whatever clears it
++        // on screen, so it can never get stuck showing after the problem is gone.
++        ControlObject::set(ConfigKey("[Library]", "load_error"), 0.0);
++
+         emit newTrackLoaded(m_pLoadedTrack);
+         emit trackRatingChanged(m_pLoadedTrack->getRating());
+     } else {

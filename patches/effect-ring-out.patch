@@ -1,0 +1,264 @@
+Description: Let Echo and Reverb ring out instead of being cut off when disabled
+ Stock Mixxx deliberately clears Echo's delay buffer and ramps Reverb's send
+ to zero over a single audio callback the instant an effect unit is disabled
+ (EchoEffect::processChannel and ReverbEffect::processChannel, both keyed on
+ EffectEnableState::Disabling). That happens even though the underlying
+ EngineEffectChain::process() already stops calling every effect in the unit
+ after that one callback regardless, so on a physical CDJ/DJM-style "ring out"
+ the tail is lost either way.
+ .
+ This patch adds an opt-in tail: EffectManifest gains tailTimeMillis (default
+ 0, i.e. every existing effect keeps today's instant cutoff unchanged).
+ EchoEffect and ReverbEffect set it to 6000 ms and drop their explicit
+ clear-buffer-on-Disabling code, so their own feedback/damping math decays
+ the sound naturally once real input stops.
+ .
+ EngineEffectChain::process() is extended, per input/output channel pair, so
+ that once a channel would normally go from Disabling to fully Disabled, it
+ instead keeps calling every effect in that chain - fed a silent (all-zero)
+ dry buffer instead of the real one, so no new signal enters - for up to the
+ chain's longest tailTimeMillis, then stops for good exactly as before. This
+ is pure bookkeeping on top of the existing enableState machinery: the real
+ enableState/m_enableState fields, and the ordinary Enabling/Disabling/
+ fadeout paths, are untouched, so every other effect and every other effect
+ rack (including the quick-effect racks) behaves exactly as it does in stock
+ Mixxx; only a chain that contains an effect with tailTimeMillis > 0 (Echo or
+ Reverb) gets the extra callbacks, and only for the channel(s) that were just
+ disabled.
+Author: GRV6 build (local)
+Forwarded: no
+
+diff --git a/src/effects/backends/effectmanifest.h b/src/effects/backends/effectmanifest.h
+--- a/src/effects/backends/effectmanifest.h
++++ b/src/effects/backends/effectmanifest.h
+@@ -29,7 +29,8 @@
+               m_isMainEQ(false),
+               m_effectRampsFromDry(false),
+               m_bAddDryToWet(false),
+-              m_metaknobDefault(0.0) {
++              m_metaknobDefault(0.0),
++              m_tailTimeMillis(0.0) {
+     }
+ 
+     /// Hack to store unique IDs in QComboBox models
+@@ -154,6 +155,18 @@
+         m_metaknobDefault = metaknobDefault;
+     }
+ 
++    /// How long, in milliseconds, this effect should keep being processed
++    /// (fed silence instead of the real input) after being disabled, so any
++    /// tail already in flight - a delay repeat, a reverb decay - can ring
++    /// out naturally instead of being cut off after one audio callback.
++    /// 0 (the default) keeps the original instant-cutoff behaviour.
++    double tailTimeMillis() const {
++        return m_tailTimeMillis;
++    }
++    void setTailTimeMillis(double tailTimeMillis) {
++        m_tailTimeMillis = tailTimeMillis;
++    }
++
+     bool operator==(const EffectManifest& other) const {
+         return other.id() == m_id && other.backendType() == m_backendType;
+     }
+@@ -187,4 +200,5 @@
+     bool m_effectRampsFromDry;
+     bool m_bAddDryToWet;
+     double m_metaknobDefault;
++    double m_tailTimeMillis;
+ };
+diff --git a/src/effects/backends/builtin/echoeffect.cpp b/src/effects/backends/builtin/echoeffect.cpp
+--- a/src/effects/backends/builtin/echoeffect.cpp
++++ b/src/effects/backends/builtin/echoeffect.cpp
+@@ -31,6 +31,10 @@
+ 
+     pManifest->setAddDryToWet(true);
+     pManifest->setEffectRampsFromDry(true);
++    // Let a delay repeat that is already in flight ring out over EngineEffectChain's
++    // tail window instead of being cut off the instant the effect is disabled. See
++    // EngineEffectChain::process() and effectmanifest.h.
++    pManifest->setTailTimeMillis(6000.0);
+ 
+     pManifest->setId(getId());
+     pManifest->setName(QObject::tr("Echo"));
+@@ -125,6 +129,10 @@
+         const mixxx::EngineParameters& engineParameters,
+         const EffectEnableState enableState,
+         const GroupFeatureState& groupFeatures) {
++    // enableState no longer changes anything here: EngineEffectChain::process() now keeps
++    // calling this with silent input for tailTimeMillis() after Disabling instead of cutting
++    // the delay buffer, so it decays through the normal feedback path below. See getManifest().
++    Q_UNUSED(enableState);
+     // The minimum of the parameter is zero so the exact center of the knob is 1 beat.
+     double period = m_pDelayParameter->value();
+     const auto send_current = static_cast<CSAMPLE_GAIN>(m_pSendParameter->value());
+@@ -237,16 +245,11 @@
+         }
+     }
+ 
+-    // The ramping of the send parameter handles ramping when enabling, so
+-    // this effect must handle ramping to dry when disabling itself (instead
+-    // of being handled by EngineEffect::process).
+-    if (enableState == EffectEnableState::Disabling) {
+-        SampleUtil::applyRampingGain(pOutput, 1.0, 0.0, engineParameters.samplesPerBuffer());
+-        pGroupState->delay_buf.clear();
+-        pGroupState->prev_send = 0;
+-    } else {
+-        pGroupState->prev_send = send_current;
+-    }
++    // Deliberately no special case for EffectEnableState::Disabling here any more: the
++    // delay buffer is left alone so a repeat already in flight keeps playing back through
++    // the normal feedback path once EngineEffectChain starts feeding silent input during
++    // its tail window, decaying naturally via feedback_current instead of being cut off.
++    pGroupState->prev_send = send_current;
+ 
+     pGroupState->prev_feedback = feedback_current;
+     pGroupState->prev_delay_samples = delay_samples;
+diff --git a/src/effects/backends/builtin/reverbeffect.cpp b/src/effects/backends/builtin/reverbeffect.cpp
+--- a/src/effects/backends/builtin/reverbeffect.cpp
++++ b/src/effects/backends/builtin/reverbeffect.cpp
+@@ -13,6 +13,10 @@
+ EffectManifestPointer ReverbEffect::getManifest() {
+     EffectManifestPointer pManifest(new EffectManifest());
+     pManifest->setAddDryToWet(true);
++    // Let a decay that is already in flight ring out over EngineEffectChain's tail
++    // window instead of being cut off the instant the effect is disabled. See
++    // EngineEffectChain::process() and effectmanifest.h.
++    pManifest->setTailTimeMillis(6000.0);
+     pManifest->setEffectRampsFromDry(true);
+ 
+     pManifest->setId(getId());
+@@ -109,13 +113,9 @@
+             sendCurrent,
+             pState->sendPrevious);
+ 
+-    // The ramping of the send parameter handles ramping when enabling, so
+-    // this effect must handle ramping to dry when disabling itself (instead
+-    // of being handled by EngineEffect::process).
+-    if (enableState == EffectEnableState::Disabling) {
+-        SampleUtil::applyRampingGain(pOutput, 1.0, 0.0, engineParameters.samplesPerBuffer());
+-        pState->sendPrevious = 0;
+-    } else {
+-        pState->sendPrevious = sendCurrent;
+-    }
++    // Deliberately no special case for EffectEnableState::Disabling here any more: the
++    // reverb tank is left alone so its decay keeps running once EngineEffectChain starts
++    // feeding silent input during its tail window, dying away naturally via decay/damping
++    // instead of being cut off.
++    pState->sendPrevious = sendCurrent;
+ }
+diff --git a/src/engine/effects/engineeffectchain.h b/src/engine/effects/engineeffectchain.h
+--- a/src/engine/effects/engineeffectchain.h
++++ b/src/engine/effects/engineeffectchain.h
+@@ -49,10 +49,16 @@
+     struct ChannelStatus {
+         ChannelStatus()
+                 : oldMixKnob(0),
+-                  enableState(EffectEnableState::Disabled) {
++                  enableState(EffectEnableState::Disabled),
++                  tailFramesRemaining(0) {
+         }
+         CSAMPLE oldMixKnob;
+         EffectEnableState enableState;
++        /// Frames left to keep processing (fed silence) after this channel was disabled,
++        /// so an effect with EffectManifest::tailTimeMillis() > 0 can ring out. 0 outside
++        /// a tail; does not affect enableState, which is left exactly as stock Mixxx
++        /// computes it.
++        unsigned int tailFramesRemaining;
+     };
+ 
+     QString debugString() const {
+@@ -72,6 +78,10 @@
+     QList<EngineEffect*> m_effects;
+     mixxx::SampleBuffer m_buffer1;
+     mixxx::SampleBuffer m_buffer2;
++    /// Always silent; fed to effects instead of the real input during a tail window
++    /// (see ChannelStatus::tailFramesRemaining) so no new dry signal enters while a
++    /// disabled effect's tail is still ringing out.
++    mixxx::SampleBuffer m_silentBuffer;
+     ChannelHandleMap<ChannelHandleMap<ChannelStatus>> m_chainStatusForChannelMatrix;
+     EngineEffectsDelay m_effectsDelay;
+ 
+diff --git a/src/engine/effects/engineeffectchain.cpp b/src/engine/effects/engineeffectchain.cpp
+--- a/src/engine/effects/engineeffectchain.cpp
++++ b/src/engine/effects/engineeffectchain.cpp
+@@ -12,9 +12,11 @@
+           m_mixMode(EffectChainMixMode::DrySlashWet),
+           m_dMix(0),
+           m_buffer1(kMaxEngineSamples),
+-          m_buffer2(kMaxEngineSamples) {
++          m_buffer2(kMaxEngineSamples),
++          m_silentBuffer(kMaxEngineSamples) {
+     // Try to prevent memory allocation.
+     m_effects.reserve(256);
++    SampleUtil::clear(m_silentBuffer.data(), kMaxEngineSamples);
+ 
+     for (const ChannelHandleAndGroup& inputChannel : registeredInputChannels) {
+         ChannelHandleMap<ChannelStatus> outputChannelMap;
+@@ -208,6 +210,40 @@
+         }
+     }
+ 
++    // Tail window: let effects that declare EffectManifest::tailTimeMillis() > 0 (Echo,
++    // Reverb) keep ringing out after being disabled, instead of being cut off after this
++    // one callback like every other effect. This only reads/writes channelStatus.
++    // tailFramesRemaining; channelStatus.enableState and m_enableState, and every other
++    // enable/disable/fadeout path in this function, are computed exactly as in stock Mixxx.
++    bool feedSilenceThisCallback = false;
++    if (effectiveChainEnableState == EffectEnableState::Disabling) {
++        // Just became Disabling this callback (the same transitional signal Echo/Reverb
++        // used to hard-cut on): look up how long a tail the effects in this chain want.
++        unsigned int tailFrames = 0;
++        for (EngineEffect* pEffect : std::as_const(m_effects)) {
++            if (pEffect != nullptr) {
++                const double effectTailMillis = pEffect->getManifest()->tailTimeMillis();
++                if (effectTailMillis > 0) {
++                    const auto effectTailFrames = static_cast<unsigned int>(
++                            effectTailMillis / 1000.0 * sampleRate);
++                    tailFrames = std::max(tailFrames, effectTailFrames);
++                }
++            }
++        }
++        channelStatus.tailFramesRemaining = tailFrames;
++    } else if (channelStatus.tailFramesRemaining > 0 &&
++            effectiveChainEnableState == EffectEnableState::Disabled) {
++        // Genuinely disabled already (not Enabling/Enabled/Disabling, so this cannot
++        // interfere with the normal re-enable ramp): keep processing for the rest of the
++        // tail, with the dry input silenced below.
++        effectiveChainEnableState = EffectEnableState::Enabled;
++        feedSilenceThisCallback = true;
++        const unsigned int framesThisCallback = numSamples / 2; // engine buffers are stereo
++        channelStatus.tailFramesRemaining -=
++                std::min(channelStatus.tailFramesRemaining, framesThisCallback);
++    }
++    CSAMPLE* pDryIn = feedSilenceThisCallback ? m_silentBuffer.data() : pIn;
++
+     CSAMPLE currentMixKnob = m_dMix;
+     CSAMPLE lastCallbackMixKnob = channelStatus.oldMixKnob;
+ 
+@@ -217,7 +253,7 @@
+         // after writing to the output buffer. This requires not to use the same buffer
+         // for in and output: Also, ChannelMixer::applyEffectsAndMixChannels
+         // requires that the input buffer does not get modified.
+-        CSAMPLE* pIntermediateInput = pIn;
++        CSAMPLE* pIntermediateInput = pDryIn;
+         CSAMPLE* pIntermediateOutput;
+         SINT effectChainGroupDelayFrames = 0;
+         bool firstAddDryToWetEffectProcessed = false;
+@@ -281,7 +317,7 @@
+                 // Dry/Wet mode: output = (input * (1-mix knob)) + (wet * mix knob)
+                 SampleUtil::copy2WithRampingGain(
+                         pOut,
+-                        pIn,
++                        pDryIn,
+                         1.0f - lastCallbackMixKnob,
+                         1.0f - currentMixKnob,
+                         pIntermediateInput,
+@@ -292,7 +328,7 @@
+                 // Dry+Wet mode: output = input + (wet * mix knob)
+                 SampleUtil::copy2WithRampingGain(
+                         pOut,
+-                        pIn,
++                        pDryIn,
+                         1.0f,
+                         1.0f,
+                         pIntermediateInput,
