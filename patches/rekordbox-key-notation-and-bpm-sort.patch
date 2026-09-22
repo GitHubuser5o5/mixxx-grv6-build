@@ -1,0 +1,50 @@
+diff --git a/src/library/basetracktablemodel.cpp b/src/library/basetracktablemodel.cpp
+--- a/src/library/basetracktablemodel.cpp
++++ b/src/library/basetracktablemodel.cpp
+@@ -1052,14 +1052,15 @@
+                     rawValue,
+                     rawSiblingValue(
+                             index, ColumnCache::COLUMN_LIBRARYTABLE_KEY_ID));
+-            // GRV6: always display musical note names, never Camelot numbers,
+-            // regardless of the user's Key notation preference - matches the
+-            // traffic-light compatibility check, which also reads note names.
++            // GRV6: always display Camelot-wheel notation (Mixxx calls it
++            // "Lancelot" internally), regardless of the user's Key notation
++            // preference. The traffic-light compatibility check is unaffected -
++            // it reads the raw composedKey above, not this display string.
+             const mixxx::track::io::key::ChromaticKey guessedKey =
+                     KeyUtils::guessKeyFromText(composedKey.toString());
+             if (guessedKey != mixxx::track::io::key::INVALID) {
+                 return KeyUtils::keyToString(guessedKey,
+-                        KeyUtils::KeyNotation::Traditional);
++                        KeyUtils::KeyNotation::Lancelot);
+             }
+             return composedKey;
+         }
+diff --git a/src/library/rekordbox/rekordboxfeature.cpp b/src/library/rekordbox/rekordboxfeature.cpp
+--- a/src/library/rekordbox/rekordboxfeature.cpp
++++ b/src/library/rekordbox/rekordboxfeature.cpp
+@@ -1818,6 +1818,12 @@
+     } else {
+         qDebug() << "Activate Rekordbox Playlist: " << playlist;
+         m_pRekordboxPlaylistModel->setPlaylist(playlist);
++        // GRV6: setPlaylist() (base class) just reset the default sort to #
++        // (playlist position); re-point it at BPM instead, ascending.
++        m_pRekordboxPlaylistModel->setDefaultSort(
++                m_pRekordboxPlaylistModel->fieldIndex(
++                        ColumnCache::COLUMN_LIBRARYTABLE_BPM),
++                Qt::AscendingOrder);
+         emit showTrackModel(m_pRekordboxPlaylistModel);
+     }
+ }
+@@ -1921,5 +1927,10 @@
+     qDebug() << "Show Rekordbox Device Playlist: " << devicePlaylist;
+ 
+     m_pRekordboxPlaylistModel->setPlaylist(devicePlaylist);
++    // GRV6: see the matching comment in activateChild().
++    m_pRekordboxPlaylistModel->setDefaultSort(
++            m_pRekordboxPlaylistModel->fieldIndex(
++                    ColumnCache::COLUMN_LIBRARYTABLE_BPM),
++            Qt::AscendingOrder);
+     emit showTrackModel(m_pRekordboxPlaylistModel);
+ }

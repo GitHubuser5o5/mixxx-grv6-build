@@ -1,0 +1,71 @@
+diff --git a/src/library/rekordbox/rekordboxfeature.cpp b/src/library/rekordbox/rekordboxfeature.cpp
+--- a/src/library/rekordbox/rekordboxfeature.cpp
++++ b/src/library/rekordbox/rekordboxfeature.cpp
+@@ -1561,8 +1561,9 @@
+ }
+ 
+ bool RekordboxPlaylistModel::isColumnInternal(int column) {
+-    // GRV6: fixed appliance column set - #, Title, Artist, Key, Duration.
+-    if (column == fieldIndex(ColumnCache::COLUMN_PLAYLISTTRACKSTABLE_POSITION) ||
++    // GRV6: fixed appliance column set - Color, #, Title, Artist, Key, Duration.
++    if (column == fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_COLOR) ||
++            column == fieldIndex(ColumnCache::COLUMN_PLAYLISTTRACKSTABLE_POSITION) ||
+             column == fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_TITLE) ||
+             column == fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_ARTIST) ||
+             column == fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_KEY) ||
+diff --git a/src/widget/wtracktableview.cpp b/src/widget/wtracktableview.cpp
+--- a/src/widget/wtracktableview.cpp
++++ b/src/widget/wtracktableview.cpp
+@@ -364,20 +364,25 @@
+     if (!pTrackModel || !pTrackModel->fixedColumnLayout()) {
+         return;
+     }
++    const int colorColumn = pTrackModel->fieldIndex(QStringLiteral("color"));
+     const int posColumn = pTrackModel->fieldIndex(QStringLiteral("position"));
+     const int artistColumn = pTrackModel->fieldIndex(QStringLiteral("artist"));
+     const int titleColumn = pTrackModel->fieldIndex(QStringLiteral("title"));
+     const int keyColumn = pTrackModel->fieldIndex(QStringLiteral("key"));
+     const int durationColumn = pTrackModel->fieldIndex(QStringLiteral("duration"));
+-    if (posColumn < 0 || artistColumn < 0 || titleColumn < 0 ||
++    if (colorColumn < 0 || posColumn < 0 || artistColumn < 0 || titleColumn < 0 ||
+             keyColumn < 0 || durationColumn < 0) {
+         return;
+     }
+ 
+-    // Visual order: #, Title, Artist, Key, Duration.
++    // Visual order: Color, #, Title, Artist, Key, Duration.
+     QHeaderView* pHeader = horizontalHeader();
+-    const int logicalOrder[] = {
+-            posColumn, titleColumn, artistColumn, keyColumn, durationColumn};
++    const int logicalOrder[] = {colorColumn,
++            posColumn,
++            titleColumn,
++            artistColumn,
++            keyColumn,
++            durationColumn};
+     int visualTarget = 0;
+     for (const int logical : logicalOrder) {
+         const int visual = pHeader->visualIndex(logical);
+@@ -392,18 +397,20 @@
+         return;
+     }
+     const QFontMetrics metrics(font());
+-    // Content-sized columns: # plus sort arrow, key names, m:ss durations.
++    // Content-sized columns: a narrow swatch, # plus sort arrow, key names, m:ss durations.
++    const int colorWidth = 14;
+     const int posWidth = metrics.horizontalAdvance(QStringLiteral("9999")) + 24;
+     const int keyWidth = metrics.horizontalAdvance(QStringLiteral("A#m")) + 24;
+     const int durationWidth =
+             metrics.horizontalAdvance(QStringLiteral("88:88")) + 16;
+-    int remaining = viewportWidth - posWidth - keyWidth - durationWidth;
++    int remaining = viewportWidth - colorWidth - posWidth - keyWidth - durationWidth;
+     if (remaining < 120) {
+         remaining = 120;
+     }
+     // Artist/Title share the rest 40/60.
+     const int artistWidth = remaining * 2 / 5;
+     const int titleWidth = remaining - artistWidth;
++    setColumnWidth(colorColumn, colorWidth);
+     setColumnWidth(posColumn, posWidth);
+     setColumnWidth(titleColumn, titleWidth);
+     setColumnWidth(artistColumn, artistWidth);
