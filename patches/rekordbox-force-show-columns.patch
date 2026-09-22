@@ -1,0 +1,18 @@
+diff --git a/src/widget/wtracktableview.cpp b/src/widget/wtracktableview.cpp
+--- a/src/widget/wtracktableview.cpp
++++ b/src/widget/wtracktableview.cpp
+@@ -267,6 +267,14 @@
+         if (pTrackModel->isColumnInternal(i)) {
+             //qDebug() << "Hiding column" << i;
+             horizontalHeader()->hideSection(i);
++        } else if (pTrackModel->fixedColumnLayout()) {
++            // GRV6: fixedColumnLayout models (Rekordbox) have a hardcoded visible column
++            // set - force every non-internal column shown every time, regardless of any
++            // header state persisted from an earlier session (e.g. from before this
++            // column existed in the fixed set, or before fixedColumnLayout existed at
++            // all). Every other model is unaffected - it keeps letting the user's own
++            // persisted column choices stand.
++            horizontalHeader()->showSection(i);
+         }
+         /* If Mixxx starts the first time or the header states have been cleared
+          * due to database schema evolution we gonna hide all columns that may
