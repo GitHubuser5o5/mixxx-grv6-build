@@ -219,19 +219,43 @@ diff --git a/src/library/basetracktablemodel.cpp b/src/library/basetracktablemod
 diff --git a/src/library/library.h b/src/library/library.h
 --- a/src/library/library.h
 +++ b/src/library/library.h
-@@ -191,5 +191,8 @@
+@@ -18,6 +18,7 @@
+ class AnalysisFeature;
+ class BrowseFeature;
+ class ControlObject;
++class ControlPushButton;
+ class CrateFeature;
+ class LibraryControl;
+ class LibraryFeature;
+@@ -191,5 +192,13 @@
      int m_iTrackTableVisibleRows;
      bool m_editMetadataSelectedClick;
      QScopedPointer<ControlObject> m_pKeyNotation;
-+    // GRV6: key display style switches, see KeyUtils::keyToGrvString
++    // GRV6: key display style, see KeyUtils::keyToGrvString. The two values are
++    // saved; the four push buttons are how the skin changes them.
 +    QScopedPointer<ControlObject> m_pGrvKeyTraditional;
 +    QScopedPointer<ControlObject> m_pGrvKeyFlats;
++    QScopedPointer<ControlPushButton> m_pGrvKeySetCamelot;
++    QScopedPointer<ControlPushButton> m_pGrvKeySetTraditional;
++    QScopedPointer<ControlPushButton> m_pGrvKeySetSharps;
++    QScopedPointer<ControlPushButton> m_pGrvKeySetFlats;
      QScopedPointer<ControlObject> m_pVisibleRowsControl;
  };
 diff --git a/src/library/library.cpp b/src/library/library.cpp
 --- a/src/library/library.cpp
 +++ b/src/library/library.cpp
-@@ -35,6 +35,7 @@
+@@ -5,8 +5,10 @@
+ #include <QMessageBox>
+ 
+ #include <algorithm>
++#include <functional>
+ 
+ #include "control/controlobject.h"
++#include "control/controlpushbutton.h"
+ #include "controllers/keyboard/keyboardeventfilter.h"
+ #include "library/analysis/analysisfeature.h"
+ #include "library/autodj/autodjfeature.h"
+@@ -35,6 +37,7 @@
  #include "library/traktor/traktorfeature.h"
  #include "mixer/playermanager.h"
  #include "moc_library.cpp"
@@ -239,15 +263,18 @@ diff --git a/src/library/library.cpp b/src/library/library.cpp
  #include "util/assert.h"
  #include "util/logger.h"
  #include "util/sandbox.h"
-@@ -85,6 +86,38 @@
+@@ -85,6 +88,69 @@
      m_pKeyNotation.reset(
              new ControlObject(mixxx::library::prefs::kKeyNotationConfigKey));
  
 +    // GRV6: how keys are written in the deck panels and the library tables
-+    // (KeyUtils::keyToGrvString). Both are saved in the user's config and
-+    // switched from the skin's Settings tab: grv6_key_traditional 0 = Camelot,
-+    // 1 = traditional names; grv6_key_flats 0 = sharps, 1 = flats (traditional
-+    // only). Created here, before the skin loads, so the skin can bind to them.
++    // (KeyUtils::keyToGrvString). grv6_key_traditional (0 = Camelot, 1 =
++    // traditional names) and grv6_key_flats (0 = sharps, 1 = flats, traditional
++    // only) hold the choice and are saved in the user's config. They are plain
++    // values: the skin's Settings tab changes them through the four
++    // grv6_key_set_* push buttons (a skin button can only write 1, and on a
++    // plain control that can never switch back, so there is no toggle here).
++    // All created here, before the skin loads, so the skin can bind to them.
 +    m_pGrvKeyTraditional.reset(new ControlObject(
 +            ConfigKey(kConfigGroup, QStringLiteral("grv6_key_traditional")),
 +            true,
@@ -260,20 +287,48 @@ diff --git a/src/library/library.cpp b/src/library/library.cpp
 +            false,
 +            true,
 +            0.0));
-+    const auto applyGrvKeyStyle = [this]() {
-+        KeyUtils::setGrvKeyStyle(
-+                m_pGrvKeyTraditional->toBool(), m_pGrvKeyFlats->toBool());
++    KeyUtils::setGrvKeyStyle(m_pGrvKeyTraditional->toBool(), m_pGrvKeyFlats->toBool());
++
++    // The style is stored in KeyUtils first and the controls are set second: the
++    // widgets watching the controls redraw as soon as they change and read it.
++    const auto setGrvKeyStyle = [this](bool traditional, bool flats) {
++        KeyUtils::setGrvKeyStyle(traditional, flats);
++        m_pGrvKeyTraditional->set(traditional ? 1.0 : 0.0);
++        m_pGrvKeyFlats->set(flats ? 1.0 : 0.0);
 +    };
-+    // Connected before any WKey exists, so the style is updated before they redraw.
-+    connect(m_pGrvKeyTraditional.data(),
-+            &ControlObject::valueChanged,
-+            this,
-+            applyGrvKeyStyle);
-+    connect(m_pGrvKeyFlats.data(),
-+            &ControlObject::valueChanged,
-+            this,
-+            applyGrvKeyStyle);
-+    applyGrvKeyStyle();
++    const auto makeGrvKeyAction = [this](QScopedPointer<ControlPushButton>* pButton,
++                                          const QString& item,
++                                          std::function<void()> action) {
++        pButton->reset(new ControlPushButton(ConfigKey(kConfigGroup, item)));
++        connect(pButton->data(),
++                &ControlObject::valueChanged,
++                this,
++                [action](double value) {
++                    if (value > 0.0) {
++                        action();
++                    }
++                });
++    };
++    makeGrvKeyAction(&m_pGrvKeySetCamelot,
++            QStringLiteral("grv6_key_set_camelot"),
++            [this, setGrvKeyStyle]() {
++                setGrvKeyStyle(false, m_pGrvKeyFlats->toBool());
++            });
++    makeGrvKeyAction(&m_pGrvKeySetTraditional,
++            QStringLiteral("grv6_key_set_traditional"),
++            [this, setGrvKeyStyle]() {
++                setGrvKeyStyle(true, m_pGrvKeyFlats->toBool());
++            });
++    makeGrvKeyAction(&m_pGrvKeySetSharps,
++            QStringLiteral("grv6_key_set_sharps"),
++            [this, setGrvKeyStyle]() {
++                setGrvKeyStyle(m_pGrvKeyTraditional->toBool(), false);
++            });
++    makeGrvKeyAction(&m_pGrvKeySetFlats,
++            QStringLiteral("grv6_key_set_flats"),
++            [this, setGrvKeyStyle]() {
++                setGrvKeyStyle(m_pGrvKeyTraditional->toBool(), true);
++            });
 +
      connect(m_pTrackCollectionManager,
              &TrackCollectionManager::libraryScanFinished,

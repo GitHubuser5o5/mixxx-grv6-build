@@ -1,0 +1,49 @@
+diff --git a/src/library/library.h b/src/library/library.h
+--- a/src/library/library.h
++++ b/src/library/library.h
+@@ -201,4 +201,6 @@
+     QScopedPointer<ControlPushButton> m_pGrvKeySetSharps;
+     QScopedPointer<ControlPushButton> m_pGrvKeySetFlats;
+     QScopedPointer<ControlObject> m_pVisibleRowsControl;
++    QScopedPointer<ControlPushButton> m_pVisibleRowsUp;
++    QScopedPointer<ControlPushButton> m_pVisibleRowsDown;
+ };
+diff --git a/src/library/library.cpp b/src/library/library.cpp
+--- a/src/library/library.cpp
++++ b/src/library/library.cpp
+@@ -326,6 +326,26 @@
+             this, &Library::slotVisibleRowsControlChanged, Qt::DirectConnection);
+     m_pVisibleRowsControl->setAndConfirm(m_iTrackTableVisibleRows);
+ 
++    // GRV6: +/- push buttons for the Settings tab's browse text size stepper (a
++    // skin button can only write 1, never "set to 8"). Same 3-20 range as the
++    // controller's shift + browse knob, which writes grv6_visible_rows directly.
++    const auto makeVisibleRowsStep = [this](QScopedPointer<ControlPushButton>* pButton,
++                                             const QString& item,
++                                             int delta) {
++        pButton->reset(new ControlPushButton(ConfigKey(kConfigGroup, item)));
++        connect(pButton->data(),
++                &ControlObject::valueChanged,
++                this,
++                [this, delta](double value) {
++                    if (value > 0.0) {
++                        slotVisibleRowsControlChanged(
++                                std::clamp(m_iTrackTableVisibleRows + delta, 3, 20));
++                    }
++                });
++    };
++    makeVisibleRowsStep(&m_pVisibleRowsUp, QStringLiteral("grv6_visible_rows_up"), 1);
++    makeVisibleRowsStep(&m_pVisibleRowsDown, QStringLiteral("grv6_visible_rows_down"), -1);
++
+     QString fontStr =
+             m_pConfig->getValueString(ConfigKey(kConfigGroup, "Font"));
+     if (!fontStr.isEmpty()) {
+@@ -810,6 +830,8 @@
+     // 0 (off) is valid too - see getTrackTableVisibleRows()'s doc comment.
+     const int visibleRows = std::clamp(static_cast<int>(value), 0, 20);
+     setVisibleRows(visibleRows);
++    // GRV6: remembered across restarts (the constructor reads VisibleRows back).
++    m_pConfig->setValue(ConfigKey(kConfigGroup, "VisibleRows"), visibleRows);
+     // Reflects the clamped value back, and re-confirms the CO's own value even
+     // when a rejected write (out of range, or a no-op repeat) would otherwise
+     // leave it unconfirmed.
