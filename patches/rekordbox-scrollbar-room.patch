@@ -1,0 +1,22 @@
+diff --git a/src/widget/wtracktableview.cpp b/src/widget/wtracktableview.cpp
+--- a/src/widget/wtracktableview.cpp
++++ b/src/widget/wtracktableview.cpp
+@@ -404,7 +404,17 @@
+         ++visualTarget;
+     }
+ 
+-    const int viewportWidth = viewport()->width();
++    // GRV6: leave room for the vertical scroll bar. When the widths are computed
++    // it is usually not shown yet (loadTrackModel() runs before the rows have
++    // arrived), and the viewport does not tell us it is coming. Once the bar
++    // appears the viewport shrinks by its width and nothing recomputes the
++    // columns, so the last one (Duration) ended under the bar and its last
++    // digits were clipped. While the bar is already shown the viewport is
++    // narrower by its width and nothing extra is reserved here.
++    const int scrollBarRoom = verticalScrollBar()->isHidden()
++            ? verticalScrollBar()->sizeHint().width()
++            : 0;
++    const int viewportWidth = viewport()->width() - scrollBarRoom;
+     if (viewportWidth <= 0) {
+         return;
+     }
