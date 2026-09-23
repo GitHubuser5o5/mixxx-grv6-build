@@ -22,7 +22,40 @@ diff --git a/src/widget/wtracktableview.h b/src/widget/wtracktableview.h
 diff --git a/src/widget/wtracktableview.cpp b/src/widget/wtracktableview.cpp
 --- a/src/widget/wtracktableview.cpp
 +++ b/src/widget/wtracktableview.cpp
-@@ -1255,6 +1255,21 @@
+@@ -410,7 +410,10 @@
+     }
+     const QFontMetrics metrics(font());
+     // Content-sized columns: a narrow swatch, # plus sort arrow, bpm/key text, 5 stars, m:ss durations.
+-    const int colorWidth = 14;
++    // GRV6: never ask for less than the header allows. WTrackTableViewHeader sets a minimum
++    // section size of 20, so a requested 14 became 20 and the columns added up to 6 pixels
++    // more than this sum assumed; Duration, the last column, ended 6 pixels past the viewport.
++    const int colorWidth = qMax(14, pHeader->minimumSectionSize());
+     const int posWidth = metrics.horizontalAdvance(QStringLiteral("9999")) + 24;
+     const int bpmWidth = metrics.horizontalAdvance(QStringLiteral("999.9")) + 24;
+     const int keyWidth = metrics.horizontalAdvance(QStringLiteral("A#m")) + 24;
+@@ -443,6 +446,20 @@
+             ? viewportWidth - usedWidth
+             : durationWidth;
+     setColumnWidth(durationColumn, stretchedDurationWidth);
++    // GRV6: make the columns add up to exactly the viewport width, whatever Qt did to the
++    // widths asked for above (sections are clamped to the minimum size, and any other
++    // visible column counts too): trim or grow Duration, and if it is already as narrow as its
++    // text allows, take the rest from Title.
++    const int overflow = pHeader->length() - viewportWidth;
++    if (overflow != 0) {
++        setColumnWidth(durationColumn, qMax(durationWidth, columnWidth(durationColumn) - overflow));
++        const int stillOver = pHeader->length() - viewportWidth;
++        if (stillOver > 0) {
++            setColumnWidth(titleColumn, qMax(60, columnWidth(titleColumn) - stillOver));
++        }
++    }
++    qDebug() << "GRV6 fixed columns: viewport" << viewportWidth << "header" << pHeader->length()
++             << "duration" << columnWidth(durationColumn);
+     // durationColumn is also the last visual section and keeps stretching to fill
+     // the remaining width (setStretchLastSection in loadTrackModel).
+ }
+@@ -1255,6 +1272,21 @@
      QTableView::keyPressEvent(event);
  }
  
