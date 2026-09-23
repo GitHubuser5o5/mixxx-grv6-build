@@ -1,7 +1,10 @@
-# Mixxx "stable 2" build
+# Mixxx "stable 2" and "stable 3" builds
 
-Stable 1 = the Mixxx you run now (Debian mixxx 2.5.0+dfsg-3, unpatched).
-Stable 2 = the same source plus the patches in `patches/series` (order matters):
+Stable 1 = Debian mixxx 2.5.0+dfsg-3, unpatched.
+Stable 2 = the same source plus the patches in `patches/series` (order matters). Built by `.github/workflows/build.yml`, versions `2.5.0+dfsg-3+grv6.rN.1`. Known good, in use, frozen: do not add patches to `patches/series`.
+Stable 3 = stable 2 plus the Settings-tab patches (#32 and up), listed in `patches/series-stable3` (the same 31 lines, then the new ones). Built by `.github/workflows/build-stable3.yml`, versions `2.5.0+dfsg-3+grv6.s3rN.1`; the `s3` makes it sort above every stable 2 version, and the two workflows count their run numbers separately. Either can be installed over the other with `apt install --allow-downgrades`.
+
+Stable 2 patches:
 
 1. pdb-corruption-hardening: no crash on damaged Rekordbox export databases, no race when a device is opened
 2. xdj-behavior: waveform colours no longer react to the EQ, fixed waveform height, loop from cue, different Filter curve
@@ -36,5 +39,10 @@ Stable 2 = the same source plus the patches in `patches/series` (order matters):
 
 31. no-bpm-check-state: #30 alone did not remove the BPM box (confirmed on an installed r9.1). Root cause: BaseTrackTableModel::roleValue() answers Qt::CheckStateRole for the BPM column from the bpm_lock field, and ANY item delegate (including the default one #30 falls back to) draws a checkbox whenever the model supplies check-state data. Rekordbox's temp table has no bpm_lock column, so every cell answered "undecidable" (Qt::PartiallyChecked), drawn as a solid box over the BPM number. The BPM case is dropped from the CheckStateRole switch, so BPM returns no check state at all. Applies to every library table, same scope as #30. The write side (setData toggling the lock) is untouched but unreachable once no indicator is drawn.
 
-Checked here: all thirty-one apply cleanly, in this exact order, on the unpatched Debian source (fresh extraction, tested end to end). Not checked here: compiling (that is what the GitHub build does) or hearing/using any of it (that is what the Pi does).
+Stable 3 adds (only in `patches/series-stable3`):
+
+32. key-style-setting: how keys are written on screen is now a live setting instead of the fixed Camelot of #23/#29. Two controls, `[Library],grv6_key_traditional` (0 = Camelot, 1 = traditional names) and `[Library],grv6_key_flats` (0 = sharps, 1 = flats, traditional only), both saved in the user's config and created by `Library` before the skin loads. `KeyUtils::keyToGrvString()` turns a key into text from two full 24-name tables (every black key spelled as a sharp, or every one as a flat - the stock traditional table mixes both) or the Camelot name. Used by the deck panels' Key widget (`WKey`, which also redraws when either control changes) and by the library Key column, which repaints on its own the next time it is shown. The Key preferences page, sorting, the traffic-light compatibility check and the search are untouched (they work from the raw key value).
+33. main-eq-graphic-default: `EffectsManager::setup()` loads the 8-band Graphic EQ into the main-mix EQ slot (`[OutputEffectRack_[Master]_Effect1]`) when effects.xml left it empty, the same way `loadDefaultEqsAndQuickEffects()` fills the per-deck EQ slots. Its knobs are `parameter1` (bass shelf), `parameter2`-`parameter7` (six mid bands) and `parameter8` (treble shelf), -12 to +12 dB, so the skin can put three touch knobs on them. An EQ that effects.xml already restored is left alone, so knob positions survive restarts.
+
+Checked here: all thirty-one apply cleanly, in this exact order, on the unpatched Debian source (fresh extraction, tested end to end); and all thirty-three (`series-stable3`) apply cleanly on a fresh extraction too. Not checked here: compiling (that is what the GitHub build does) or hearing/using any of it (that is what the Pi does).
 Left out on purpose: everything that only serves the Pioneered touch skin, browse-bpm-column, jog-nudge (DDJ-400), browse-encoder-zoom (superseded by #19, done live instead of via Preferences).

@@ -1,0 +1,35 @@
+diff --git a/src/effects/effectsmanager.cpp b/src/effects/effectsmanager.cpp
+--- a/src/effects/effectsmanager.cpp
++++ b/src/effects/effectsmanager.cpp
+@@ -3,6 +3,7 @@
+ #include <QDir>
+ #include <QMetaType>
+ 
++#include "effects/backends/builtin/graphiceqeffect.h"
+ #include "effects/chains/equalizereffectchain.h"
+ #include "effects/chains/outputeffectchain.h"
+ #include "effects/chains/quickeffectchain.h"
+@@ -80,6 +81,23 @@
+     // readEffectsXml() is running is also initialized.
+     m_initializedFromEffectsXml = true;
+     readEffectsXml();
++
++    // GRV6: the main-mix equalizer slot is empty on a fresh install (and after
++    // any effects.xml that saved it empty), which leaves nothing for the skin's
++    // Settings tab to turn. Load the 8-band Graphic EQ there when nothing else
++    // is loaded, the same way loadDefaultEqsAndQuickEffects() fills the
++    // per-deck EQ slots. An EQ that effects.xml already restored is left alone,
++    // so its saved knob positions survive restarts.
++    if (m_outputEffectChain) {
++        const auto pMainEqSlot = m_outputEffectChain->getEffectSlot(0);
++        if (pMainEqSlot && !pMainEqSlot->isLoaded()) {
++            const auto pGraphicEq = m_pBackendManager->getManifest(
++                    GraphicEQEffect::getId(), EffectBackendType::BuiltIn);
++            if (pGraphicEq) {
++                pMainEqSlot->loadEffectWithDefaults(pGraphicEq);
++            }
++        }
++    }
+ }
+ 
+ void EffectsManager::registerInputChannel(const ChannelHandleAndGroup& handle_group) {

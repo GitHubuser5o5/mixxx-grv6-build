@@ -1,0 +1,280 @@
+diff --git a/src/track/keyutils.h b/src/track/keyutils.h
+--- a/src/track/keyutils.h
++++ b/src/track/keyutils.h
+@@ -64,6 +64,16 @@
+             const Keys& keys,
+             KeyNotation notation = KeyNotation::Custom);
+ 
++    /// GRV6: the key text the deck panels and the library tables show, in
++    /// the style chosen on the Settings tab: Camelot ("8A"), traditional
++    /// with sharps ("D♯m") or traditional with flats ("E♭m"). Independent of
++    /// the Key preferences page and its static notation cache.
++    static QString keyToGrvString(mixxx::track::io::key::ChromaticKey key);
++
++    /// GRV6: called by Library whenever [Library],grv6_key_traditional or
++    /// [Library],grv6_key_flats changes.
++    static void setGrvKeyStyle(bool traditional, bool flats);
++
+     static mixxx::track::io::key::ChromaticKey keyFromNumericValue(double value);
+     static mixxx::track::io::key::ChromaticKey keyFromNumericValue(int value);
+     static KeyNotation keyNotationFromNumericValue(double value);
+diff --git a/src/track/keyutils.cpp b/src/track/keyutils.cpp
+--- a/src/track/keyutils.cpp
++++ b/src/track/keyutils.cpp
+@@ -5,6 +5,8 @@
+ #include <QRegularExpression>
+ #include <QtDebug>
+ 
++#include <atomic>
++
+ #include "preferences/keydetectionsettings.h"
+ #include "util/compatibility/qmutex.h"
+ 
+@@ -65,6 +67,67 @@
+         QStringLiteral(u"B♭m"),
+         QStringLiteral(u"Bm")};
+ 
++// GRV6: traditional key names with every black key spelled as a sharp or as a
++// flat (the table above mixes both). Same order as s_traditionalKeyNames.
++const QString s_grvSharpKeyNames[] = {
++        QStringLiteral(u"INVALID"),
++        QStringLiteral(u"C"),
++        QStringLiteral(u"C♯"),
++        QStringLiteral(u"D"),
++        QStringLiteral(u"D♯"),
++        QStringLiteral(u"E"),
++        QStringLiteral(u"F"),
++        QStringLiteral(u"F♯"),
++        QStringLiteral(u"G"),
++        QStringLiteral(u"G♯"),
++        QStringLiteral(u"A"),
++        QStringLiteral(u"A♯"),
++        QStringLiteral(u"B"),
++        QStringLiteral(u"Cm"),
++        QStringLiteral(u"C♯m"),
++        QStringLiteral(u"Dm"),
++        QStringLiteral(u"D♯m"),
++        QStringLiteral(u"Em"),
++        QStringLiteral(u"Fm"),
++        QStringLiteral(u"F♯m"),
++        QStringLiteral(u"Gm"),
++        QStringLiteral(u"G♯m"),
++        QStringLiteral(u"Am"),
++        QStringLiteral(u"A♯m"),
++        QStringLiteral(u"Bm")};
++
++const QString s_grvFlatKeyNames[] = {
++        QStringLiteral(u"INVALID"),
++        QStringLiteral(u"C"),
++        QStringLiteral(u"D♭"),
++        QStringLiteral(u"D"),
++        QStringLiteral(u"E♭"),
++        QStringLiteral(u"E"),
++        QStringLiteral(u"F"),
++        QStringLiteral(u"G♭"),
++        QStringLiteral(u"G"),
++        QStringLiteral(u"A♭"),
++        QStringLiteral(u"A"),
++        QStringLiteral(u"B♭"),
++        QStringLiteral(u"B"),
++        QStringLiteral(u"Cm"),
++        QStringLiteral(u"D♭m"),
++        QStringLiteral(u"Dm"),
++        QStringLiteral(u"E♭m"),
++        QStringLiteral(u"Em"),
++        QStringLiteral(u"Fm"),
++        QStringLiteral(u"G♭m"),
++        QStringLiteral(u"Gm"),
++        QStringLiteral(u"A♭m"),
++        QStringLiteral(u"Am"),
++        QStringLiteral(u"B♭m"),
++        QStringLiteral(u"Bm")};
++
++// GRV6: 0 = Camelot, 1 = traditional with sharps, 2 = traditional with flats.
++// Written from the GUI thread when the Settings tab changes a control, read
++// while painting; a plain atomic is all the synchronisation this needs.
++std::atomic<int> s_grvKeyStyle{0};
++
+ // ID3v2.3.0 specification (https://id3.org/id3v2.3.0):
+ // The 'Initial key' frame contains the musical key in which the sound starts.
+ // It is represented as a string with a maximum length of three characters.
+@@ -395,6 +458,27 @@
+ }
+ 
+ // static
++QString KeyUtils::keyToGrvString(ChromaticKey key) {
++    if (!ChromaticKey_IsValid(key) ||
++            key == mixxx::track::io::key::INVALID) {
++        return {};
++    }
++    switch (s_grvKeyStyle.load(std::memory_order_relaxed)) {
++    case 1:
++        return s_grvSharpKeyNames[static_cast<int>(key)];
++    case 2:
++        return s_grvFlatKeyNames[static_cast<int>(key)];
++    default:
++        return keyToString(key, KeyNotation::Lancelot);
++    }
++}
++
++// static
++void KeyUtils::setGrvKeyStyle(bool traditional, bool flats) {
++    s_grvKeyStyle.store(traditional ? (flats ? 2 : 1) : 0, std::memory_order_relaxed);
++}
++
++// static
+ QString KeyUtils::formatGlobalKey(const Keys& keys, KeyNotation notation) {
+     const mixxx::track::io::key::ChromaticKey globalKey = keys.getGlobalKey();
+     if (globalKey != mixxx::track::io::key::INVALID) {
+diff --git a/src/widget/wkey.h b/src/widget/wkey.h
+--- a/src/widget/wkey.h
++++ b/src/widget/wkey.h
+@@ -21,5 +21,8 @@
+     bool m_displayCents;
+     bool m_displayKey;
+     ControlProxy m_keyNotation;
++    // GRV6: the Settings tab's key style switches, see KeyUtils::keyToGrvString
++    ControlProxy m_grvKeyTraditional;
++    ControlProxy m_grvKeyFlats;
+     ControlProxy m_engineKeyDistance;
+ };
+diff --git a/src/widget/wkey.cpp b/src/widget/wkey.cpp
+--- a/src/widget/wkey.cpp
++++ b/src/widget/wkey.cpp
+@@ -9,12 +9,24 @@
+         : WLabel(pParent),
+           m_dOldValue(0),
+           m_keyNotation(mixxx::library::prefs::kKeyNotationConfigKey, this),
++          m_grvKeyTraditional(ConfigKey(QStringLiteral("[Library]"),
++                                      QStringLiteral("grv6_key_traditional")),
++                  this,
++                  ControlFlag::AllowMissingOrInvalid),
++          m_grvKeyFlats(ConfigKey(QStringLiteral("[Library]"),
++                                QStringLiteral("grv6_key_flats")),
++                  this,
++                  ControlFlag::AllowMissingOrInvalid),
+           m_engineKeyDistance(group,
+                   "visual_key_distance",
+                   this,
+                   ControlFlag::AllowMissingOrInvalid) {
+     setValue(m_dOldValue);
+     m_keyNotation.connectValueChanged(this, &WKey::keyNotationChanged);
++    // GRV6: Library connected its own slot (KeyUtils::setGrvKeyStyle) to these
++    // two controls first, so the style is already updated when this runs.
++    m_grvKeyTraditional.connectValueChanged(this, &WKey::keyNotationChanged);
++    m_grvKeyFlats.connectValueChanged(this, &WKey::keyNotationChanged);
+     m_engineKeyDistance.connectValueChanged(this, &WKey::setCents);
+ }
+ 
+@@ -36,17 +48,19 @@
+     mixxx::track::io::key::ChromaticKey key =
+             KeyUtils::keyFromNumericValue(dValue);
+     if (key != mixxx::track::io::key::INVALID) {
+-        // GRV6: always Camelot-wheel notation (KeyUtils calls it "Lancelot"), matching the
+-        // library table (key-traffic-light.patch, rekordbox-key-notation-and-bpm-sort.patch).
++        // GRV6: Camelot-wheel notation (KeyUtils calls it "Lancelot") or traditional
++        // names with sharps / flats, as chosen on the Settings tab
++        // ([Library],grv6_key_traditional and grv6_key_flats), matching the library
++        // table (key-traffic-light.patch, rekordbox-key-notation-and-bpm-sort.patch).
+         // The default (no notation argument -> KeyNotation::Custom) reads a static cache
+         // (KeyUtils::s_notation) that is only ever populated by DlgPrefKey - the Key
+         // Preferences page - when it is constructed or the user changes its setting there.
+         // It does not react to [Library],key_notation being set live (e.g. from a skin
+-        // manifest attribute), so that approach cannot work here; this bypasses the cache
+-        // entirely instead, the same way the library table's Key column already does.
++        // manifest attribute), so that approach cannot work here; keyToGrvString bypasses
++        // the cache entirely instead, the same way the library table's Key column does.
+         QString keyStr = "";
+         if (m_displayKey) {
+-            keyStr = KeyUtils::keyToString(key, KeyUtils::KeyNotation::Lancelot);
++            keyStr = KeyUtils::keyToGrvString(key);
+         }
+         if (m_displayCents) {
+             double diff_cents = m_engineKeyDistance.get();
+diff --git a/src/library/basetracktablemodel.cpp b/src/library/basetracktablemodel.cpp
+--- a/src/library/basetracktablemodel.cpp
++++ b/src/library/basetracktablemodel.cpp
+@@ -1055,15 +1055,15 @@
+                     rawValue,
+                     rawSiblingValue(
+                             index, ColumnCache::COLUMN_LIBRARYTABLE_KEY_ID));
+-            // GRV6: always display Camelot-wheel notation (Mixxx calls it
+-            // "Lancelot" internally), regardless of the user's Key notation
+-            // preference. The traffic-light compatibility check is unaffected -
+-            // it reads the raw composedKey above, not this display string.
++            // GRV6: display the style chosen on the Settings tab (Camelot,
++            // traditional with sharps or with flats), regardless of the user's
++            // Key notation preference. The traffic-light compatibility check is
++            // unaffected - it reads the raw composedKey above, not this display
++            // string.
+             const mixxx::track::io::key::ChromaticKey guessedKey =
+                     KeyUtils::guessKeyFromText(composedKey.toString());
+             if (guessedKey != mixxx::track::io::key::INVALID) {
+-                return KeyUtils::keyToString(guessedKey,
+-                        KeyUtils::KeyNotation::Lancelot);
++                return KeyUtils::keyToGrvString(guessedKey);
+             }
+             return composedKey;
+         }
+diff --git a/src/library/library.h b/src/library/library.h
+--- a/src/library/library.h
++++ b/src/library/library.h
+@@ -191,5 +191,8 @@
+     int m_iTrackTableVisibleRows;
+     bool m_editMetadataSelectedClick;
+     QScopedPointer<ControlObject> m_pKeyNotation;
++    // GRV6: key display style switches, see KeyUtils::keyToGrvString
++    QScopedPointer<ControlObject> m_pGrvKeyTraditional;
++    QScopedPointer<ControlObject> m_pGrvKeyFlats;
+     QScopedPointer<ControlObject> m_pVisibleRowsControl;
+ };
+diff --git a/src/library/library.cpp b/src/library/library.cpp
+--- a/src/library/library.cpp
++++ b/src/library/library.cpp
+@@ -35,6 +35,7 @@
+ #include "library/traktor/traktorfeature.h"
+ #include "mixer/playermanager.h"
+ #include "moc_library.cpp"
++#include "track/keyutils.h"
+ #include "util/assert.h"
+ #include "util/logger.h"
+ #include "util/sandbox.h"
+@@ -85,6 +86,38 @@
+     m_pKeyNotation.reset(
+             new ControlObject(mixxx::library::prefs::kKeyNotationConfigKey));
+ 
++    // GRV6: how keys are written in the deck panels and the library tables
++    // (KeyUtils::keyToGrvString). Both are saved in the user's config and
++    // switched from the skin's Settings tab: grv6_key_traditional 0 = Camelot,
++    // 1 = traditional names; grv6_key_flats 0 = sharps, 1 = flats (traditional
++    // only). Created here, before the skin loads, so the skin can bind to them.
++    m_pGrvKeyTraditional.reset(new ControlObject(
++            ConfigKey(kConfigGroup, QStringLiteral("grv6_key_traditional")),
++            true,
++            false,
++            true,
++            0.0));
++    m_pGrvKeyFlats.reset(new ControlObject(
++            ConfigKey(kConfigGroup, QStringLiteral("grv6_key_flats")),
++            true,
++            false,
++            true,
++            0.0));
++    const auto applyGrvKeyStyle = [this]() {
++        KeyUtils::setGrvKeyStyle(
++                m_pGrvKeyTraditional->toBool(), m_pGrvKeyFlats->toBool());
++    };
++    // Connected before any WKey exists, so the style is updated before they redraw.
++    connect(m_pGrvKeyTraditional.data(),
++            &ControlObject::valueChanged,
++            this,
++            applyGrvKeyStyle);
++    connect(m_pGrvKeyFlats.data(),
++            &ControlObject::valueChanged,
++            this,
++            applyGrvKeyStyle);
++    applyGrvKeyStyle();
++
+     connect(m_pTrackCollectionManager,
+             &TrackCollectionManager::libraryScanFinished,
+             this,
