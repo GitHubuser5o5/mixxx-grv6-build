@@ -1,0 +1,21 @@
+diff --git a/src/library/basetracktablemodel.cpp b/src/library/basetracktablemodel.cpp
+--- a/src/library/basetracktablemodel.cpp
++++ b/src/library/basetracktablemodel.cpp
+@@ -1140,11 +1140,12 @@
+                     index,
+                     ColumnCache::COLUMN_LIBRARYTABLE_PLAYED);
+             break;
+-        case ColumnCache::COLUMN_LIBRARYTABLE_BPM:
+-            boolValue = rawSiblingValue(
+-                    index,
+-                    ColumnCache::COLUMN_LIBRARYTABLE_BPM_LOCK);
+-            break;
++        // GRV6: no check state for the BPM column (the "BPM locked" indicator). Any item
++        // delegate draws a checkbox whenever the model supplies check-state data, so
++        // dropping only BPMDelegate (no-bpm-lock-checkbox.patch) left the box in place -
++        // and for Rekordbox, whose temp table has no bpm_lock column at all, every cell
++        // reported "undecidable" (Qt::PartiallyChecked), drawn as a solid box over the
++        // number. BPM falls through to the default case instead: no check state at all.
+         default:
+             // No check state supported
+             return QVariant();
