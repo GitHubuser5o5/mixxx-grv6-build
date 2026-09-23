@@ -1,0 +1,46 @@
+diff --git a/src/widget/wtracktableview.h b/src/widget/wtracktableview.h
+--- a/src/widget/wtracktableview.h
++++ b/src/widget/wtracktableview.h
+@@ -38,6 +38,9 @@
+     void pasteFromSidebar() override;
+     void keyPressEvent(QKeyEvent* event) override;
+     void resizeEvent(QResizeEvent* event) override;
++    // GRV6: re-fits the fixed column layout when the viewport changes size on its own
++    // (the vertical scroll bar appearing or disappearing).
++    bool viewportEvent(QEvent* event) override;
+     void activateSelectedTrack();
+     void loadSelectedTrackToGroup(const QString& group, bool play);
+     void assignNextTrackColor() override;
+@@ -165,6 +168,7 @@
+     // GRV6: proportional column widths + visual order for models with a
+     // fixed appliance column layout (#, Title, Artist, Key, Duration).
+     void applyFixedColumnWidths();
++    bool m_applyingFixedColumnWidths = false;
+ 
+     void hideOrRemoveSelectedTracks();
+ 
+diff --git a/src/widget/wtracktableview.cpp b/src/widget/wtracktableview.cpp
+--- a/src/widget/wtracktableview.cpp
++++ b/src/widget/wtracktableview.cpp
+@@ -1255,6 +1255,21 @@
+     QTableView::keyPressEvent(event);
+ }
+ 
++bool WTrackTableView::viewportEvent(QEvent* event) {
++    const bool handled = WLibraryTableView::viewportEvent(event);
++    // GRV6: the viewport changes size without this widget being resized when the
++    // vertical scroll bar appears or disappears. The rows arrive after the columns
++    // were first sized, so the scroll bar usually shows up later and takes its
++    // width from the viewport; the last column (Duration) then ended under the bar
++    // and its last digits were clipped. Fit the fixed columns to the new width.
++    if (event->type() == QEvent::Resize && !m_applyingFixedColumnWidths) {
++        m_applyingFixedColumnWidths = true;
++        applyFixedColumnWidths();
++        m_applyingFixedColumnWidths = false;
++    }
++    return handled;
++}
++
+ void WTrackTableView::resizeEvent(QResizeEvent* event) {
+     // When the tracks view shrinks in height, e.g. when other skin regions expand,
+     // and if the row was visible before resizing, scroll to it afterwards.
