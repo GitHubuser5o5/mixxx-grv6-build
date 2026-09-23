@@ -1,0 +1,23 @@
+diff --git a/src/widget/wkey.cpp b/src/widget/wkey.cpp
+--- a/src/widget/wkey.cpp
++++ b/src/widget/wkey.cpp
+@@ -36,10 +36,17 @@
+     mixxx::track::io::key::ChromaticKey key =
+             KeyUtils::keyFromNumericValue(dValue);
+     if (key != mixxx::track::io::key::INVALID) {
+-        // Render this key with the user-provided notation.
++        // GRV6: always Camelot-wheel notation (KeyUtils calls it "Lancelot"), matching the
++        // library table (key-traffic-light.patch, rekordbox-key-notation-and-bpm-sort.patch).
++        // The default (no notation argument -> KeyNotation::Custom) reads a static cache
++        // (KeyUtils::s_notation) that is only ever populated by DlgPrefKey - the Key
++        // Preferences page - when it is constructed or the user changes its setting there.
++        // It does not react to [Library],key_notation being set live (e.g. from a skin
++        // manifest attribute), so that approach cannot work here; this bypasses the cache
++        // entirely instead, the same way the library table's Key column already does.
+         QString keyStr = "";
+         if (m_displayKey) {
+-            keyStr = KeyUtils::keyToString(key);
++            keyStr = KeyUtils::keyToString(key, KeyUtils::KeyNotation::Lancelot);
+         }
+         if (m_displayCents) {
+             double diff_cents = m_engineKeyDistance.get();
