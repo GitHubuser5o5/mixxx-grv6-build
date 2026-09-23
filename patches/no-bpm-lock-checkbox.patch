@@ -1,0 +1,17 @@
+diff --git a/src/library/basetracktablemodel.cpp b/src/library/basetracktablemodel.cpp
+--- a/src/library/basetracktablemodel.cpp
++++ b/src/library/basetracktablemodel.cpp
+@@ -642,8 +642,11 @@
+             });
+     if (index == fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_RATING)) {
+         return new StarDelegate(pTableView);
+-    } else if (index == fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_BPM)) {
+-        return new BPMDelegate(pTableView);
++    // GRV6: no BPMDelegate for the BPM column - it draws a "lock this BPM against
++    // re-analysis" checkbox that was never styled by this skin (an unstyled, oversized
++    // box) and is not used on this rig anyway (BPM values come from Rekordbox's own
++    // analysis, not Mixxx's). Falls through to the default delegate: plain numeric text,
++    // same as every other column without a special one.
+     } else if (index == fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_TIMESPLAYED)) {
+         return new CheckboxDelegate(pTableView, QStringLiteral("LibraryPlayedCheckbox"));
+     } else if (PlayerManager::numPreviewDecks() > 0 &&
