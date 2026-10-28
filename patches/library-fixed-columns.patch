@@ -1,0 +1,192 @@
+diff --git a/src/library/librarytablemodel.h b/src/library/librarytablemodel.h
+--- a/src/library/librarytablemodel.h
++++ b/src/library/librarytablemodel.h
+@@ -12,6 +12,10 @@
+     void setTableModel();
+ 
+     bool isColumnInternal(int column) final;
++    // GRV6: same fixed appliance column layout as the Rekordbox views.
++    bool fixedColumnLayout() const override {
++        return true;
++    }
+     // Takes a list of locations and add the tracks to the library. Returns the
+     // number of successful additions.
+     int addTracks(const QModelIndex& index, const QList<QString>& locations) final;
+diff --git a/src/library/trackset/tracksettablemodel.h b/src/library/trackset/tracksettablemodel.h
+--- a/src/library/trackset/tracksettablemodel.h
++++ b/src/library/trackset/tracksettablemodel.h
+@@ -11,6 +11,11 @@
+             const char* settingsNamespace);
+ 
+     bool isColumnInternal(int column) override;
++    // GRV6: playlists, crates, history and Auto DJ use the same fixed appliance
++    // column layout as the Rekordbox views.
++    bool fixedColumnLayout() const override {
++        return true;
++    }
+ 
+     int addTracks(const QModelIndex& index, const QList<QString>& locations) final;
+ };
+diff --git a/src/widget/wtracktableview.cpp b/src/widget/wtracktableview.cpp
+--- a/src/widget/wtracktableview.cpp
++++ b/src/widget/wtracktableview.cpp
+@@ -165,6 +165,28 @@
+     pasteTracks(QModelIndex());
+ }
+ 
++namespace {
++// GRV6: the columns of the fixed layout, in the order they appear: Color, #, Title, Artist,
++// BPM, Key, Rating, Duration. A column the model does not have (Tracks and crates have no #
++// column) is left out. Title, Artist and Duration are required; without all three the list
++// is empty and the model is not laid out.
++QList<int> fixedLayoutColumns(const TrackModel* pTrackModel) {
++    QList<int> columns;
++    for (const char* name : {"color", "position", "title", "artist", "bpm", "key", "rating", "duration"}) {
++        const int column = pTrackModel->fieldIndex(QString::fromLatin1(name));
++        if (column >= 0) {
++            columns.append(column);
++        }
++    }
++    for (const char* required : {"title", "artist", "duration"}) {
++        if (pTrackModel->fieldIndex(QString::fromLatin1(required)) < 0) {
++            return {};
++        }
++    }
++    return columns;
++}
++} // namespace
++
+ // slot
+ void WTrackTableView::loadTrackModel(QAbstractItemModel* model, bool restoreState) {
+     qDebug() << "WTrackTableView::loadTrackModel()" << model;
+@@ -252,6 +274,10 @@
+     header->setDefaultAlignment(Qt::AlignLeft);
+ 
+     // Initialize all column-specific things
++    // GRV6: the columns a fixed-layout model shows (empty for every other model)
++    const QList<int> fixedColumns = pTrackModel->fixedColumnLayout()
++            ? fixedLayoutColumns(pTrackModel)
++            : QList<int>();
+     for (int i = 0; i < model->columnCount(); ++i) {
+         // Setup delegates according to what the model tells us
+         QAbstractItemDelegate* delegate =
+@@ -268,13 +294,17 @@
+             //qDebug() << "Hiding column" << i;
+             horizontalHeader()->hideSection(i);
+         } else if (pTrackModel->fixedColumnLayout()) {
+-            // GRV6: fixedColumnLayout models (Rekordbox) have a hardcoded visible column
+-            // set - force every non-internal column shown every time, regardless of any
+-            // header state persisted from an earlier session (e.g. from before this
++            // GRV6: fixedColumnLayout models have a hardcoded visible column set - show
++            // exactly those columns and hide every other one, every time, regardless of
++            // any header state persisted from an earlier session (e.g. from before a
+             // column existed in the fixed set, or before fixedColumnLayout existed at
+             // all). Every other model is unaffected - it keeps letting the user's own
+             // persisted column choices stand.
+-            horizontalHeader()->showSection(i);
++            if (fixedColumns.contains(i) || fixedColumns.isEmpty()) {
++                horizontalHeader()->showSection(i);
++            } else {
++                horizontalHeader()->hideSection(i);
++            }
+         }
+         /* If Mixxx starts the first time or the header states have been cleared
+          * due to database schema evolution we gonna hide all columns that may
+@@ -282,6 +312,7 @@
+          * key column by default unless the user brings it to front
+          */
+         if (pTrackModel->isColumnHiddenByDefault(i) &&
++                !pTrackModel->fixedColumnLayout() &&
+                 !header->hasPersistedHeaderState()) {
+             //qDebug() << "Hiding column" << i;
+             horizontalHeader()->hideSection(i);
+@@ -380,8 +411,7 @@
+     const int keyColumn = pTrackModel->fieldIndex(QStringLiteral("key"));
+     const int ratingColumn = pTrackModel->fieldIndex(QStringLiteral("rating"));
+     const int durationColumn = pTrackModel->fieldIndex(QStringLiteral("duration"));
+-    if (colorColumn < 0 || posColumn < 0 || artistColumn < 0 || titleColumn < 0 ||
+-            bpmColumn < 0 || keyColumn < 0 || ratingColumn < 0 || durationColumn < 0) {
++    if (artistColumn < 0 || titleColumn < 0 || durationColumn < 0) {
+         return;
+     }
+ 
+@@ -397,6 +427,9 @@
+             durationColumn};
+     int visualTarget = 0;
+     for (const int logical : logicalOrder) {
++        if (logical < 0) {
++            continue;   // this model has no such column
++        }
+         const int visual = pHeader->visualIndex(logical);
+         if (visual >= 0 && visual != visualTarget) {
+             pHeader->moveSection(visual, visualTarget);
+@@ -413,11 +446,18 @@
+     // GRV6: never ask for less than the header allows. WTrackTableViewHeader sets a minimum
+     // section size of 20, so a requested 14 became 20 and the columns added up to 6 pixels
+     // more than this sum assumed; Duration, the last column, ended 6 pixels past the viewport.
+-    const int colorWidth = qMax(14, pHeader->minimumSectionSize());
+-    const int posWidth = metrics.horizontalAdvance(QStringLiteral("9999")) + 24;
+-    const int bpmWidth = metrics.horizontalAdvance(QStringLiteral("999.9")) + 24;
+-    const int keyWidth = metrics.horizontalAdvance(QStringLiteral("A#m")) + 24;
+-    const int ratingWidth = 90;
++    // A column this model does not have counts as width 0.
++    const int colorWidth = colorColumn < 0 ? 0 : qMax(14, pHeader->minimumSectionSize());
++    const int posWidth = posColumn < 0
++            ? 0
++            : metrics.horizontalAdvance(QStringLiteral("9999")) + 24;
++    const int bpmWidth = bpmColumn < 0
++            ? 0
++            : metrics.horizontalAdvance(QStringLiteral("999.9")) + 24;
++    const int keyWidth = keyColumn < 0
++            ? 0
++            : metrics.horizontalAdvance(QStringLiteral("A#m")) + 24;
++    const int ratingWidth = ratingColumn < 0 ? 0 : 90;
+     const int durationWidth =
+             metrics.horizontalAdvance(QStringLiteral("88:88")) + 16;
+     int remaining = viewportWidth - colorWidth - posWidth - bpmWidth - keyWidth -
+@@ -428,13 +468,23 @@
+     // Artist/Title share the rest 40/60.
+     const int artistWidth = remaining * 2 / 5;
+     const int titleWidth = remaining - artistWidth;
+-    setColumnWidth(colorColumn, colorWidth);
+-    setColumnWidth(posColumn, posWidth);
++    if (colorColumn >= 0) {
++        setColumnWidth(colorColumn, colorWidth);
++    }
++    if (posColumn >= 0) {
++        setColumnWidth(posColumn, posWidth);
++    }
+     setColumnWidth(titleColumn, titleWidth);
+     setColumnWidth(artistColumn, artistWidth);
+-    setColumnWidth(bpmColumn, bpmWidth);
+-    setColumnWidth(keyColumn, keyWidth);
+-    setColumnWidth(ratingColumn, ratingWidth);
++    if (bpmColumn >= 0) {
++        setColumnWidth(bpmColumn, bpmWidth);
++    }
++    if (keyColumn >= 0) {
++        setColumnWidth(keyColumn, keyWidth);
++    }
++    if (ratingColumn >= 0) {
++        setColumnWidth(ratingColumn, ratingWidth);
++    }
+     // GRV6: set durationColumn's width explicitly too, instead of relying only on
+     // setStretchLastSection (loadTrackModel() calls that BEFORE the moveSection()
+     // reordering above runs, so Qt may still be tracking a different column as
+@@ -460,6 +510,16 @@
+     }
+     qDebug() << "GRV6 fixed columns: viewport" << viewportWidth << "header" << pHeader->length()
+              << "duration" << columnWidth(durationColumn);
++    if (pHeader->length() != viewportWidth) {
++        // Should not happen: list every shown section so the log says which one is wider
++        // than expected.
++        for (int logical = 0; logical < pHeader->count(); ++logical) {
++            if (!pHeader->isSectionHidden(logical)) {
++                qDebug() << "GRV6 fixed columns: shown section" << logical << "visual"
++                         << pHeader->visualIndex(logical) << "width" << columnWidth(logical);
++            }
++        }
++    }
+     // durationColumn is also the last visual section and keeps stretching to fill
+     // the remaining width (setStretchLastSection in loadTrackModel).
+ }
