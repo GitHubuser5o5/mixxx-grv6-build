@@ -1,0 +1,46 @@
+diff --git a/src/library/basetracktablemodel.cpp b/src/library/basetracktablemodel.cpp
+--- a/src/library/basetracktablemodel.cpp
++++ b/src/library/basetracktablemodel.cpp
+@@ -6,6 +6,7 @@
+ #include <QMimeData>
+ #include <QScreen>
+ #include <QSet>
++#include <QStyledItemDelegate>
+ 
+ #include <functional>
+ #include <memory>
+@@ -40,6 +41,25 @@
+ 
+ namespace {
+ 
++// GRV6: the Key column's delegate. The traffic light (the green Key cell of a track that is
++// compatible with the master deck) is the cell's Qt::BackgroundRole, but a selected row is
++// painted with the stylesheet's selection colour over it, hiding the traffic light exactly on
++// the row you are looking at. A cell that has a background of its own is therefore drawn as if
++// it were not selected. No Q_OBJECT: nothing here needs the meta object system.
++class GrvKeyDelegate : public QStyledItemDelegate {
++  public:
++    explicit GrvKeyDelegate(QObject* pParent)
++            : QStyledItemDelegate(pParent) {
++    }
++
++    void initStyleOption(QStyleOptionViewItem* pOption, const QModelIndex& index) const override {
++        QStyledItemDelegate::initStyleOption(pOption, index);
++        if (index.data(Qt::BackgroundRole).isValid()) {
++            pOption->state &= ~QStyle::State_Selected;
++        }
++    }
++};
++
+ const mixxx::Logger kLogger("BaseTrackTableModel");
+ 
+ constexpr double kRelativeHeightOfCoverartToolTip =
+@@ -647,6 +667,8 @@
+     // box) and is not used on this rig anyway (BPM values come from Rekordbox's own
+     // analysis, not Mixxx's). Falls through to the default delegate: plain numeric text,
+     // same as every other column without a special one.
++    } else if (index == fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_KEY)) {
++        return new GrvKeyDelegate(pTableView);
+     } else if (index == fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_TIMESPLAYED)) {
+         return new CheckboxDelegate(pTableView, QStringLiteral("LibraryPlayedCheckbox"));
+     } else if (PlayerManager::numPreviewDecks() > 0 &&
