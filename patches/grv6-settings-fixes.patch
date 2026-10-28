@@ -1,0 +1,168 @@
+diff --git a/src/grv6/grv6system.h b/src/grv6/grv6system.h
+--- a/src/grv6/grv6system.h
++++ b/src/grv6/grv6system.h
+@@ -17,11 +17,11 @@
+ /// cannot do on its own. All controls live in the [GRV6] group and are created
+ /// before the skin loads, so the skin can bind to them:
+ ///
+-///   startup_quantize (0/1), startup_tempo (0-3 = +-6/10/16/50 %),
++///   startup_quantize (0/1), startup_keylock (0/1), startup_tempo (0-3 = +-6/10/16/50 %),
+ ///   startup_time (0 TIME, 1 REMAIN)   applied once after the first skin load
+ ///   xf_curve (0 smooth, 1 sharp cut)  applied at start and on every change
+ ///   load_block (0 allow, 1 block)     read by WTrackTableView when loading
+-///   sleep (0 off, 1-5 = 5/10/15/30/60 minutes), sleep_now (push button)
++///   sleep (0 off, 1-4 = 10/30/60/90 minutes), sleep_now (push button, acts on release)
+ ///   power_off (hold 5 s), power_holding (0 idle, 1 held, 2 shutting down)
+ ///   theme (0 dark, 1 light), accent (0-4)  = the skin colour scheme
+ ///   usb_count, usbN_state/size_gb/free_gb/used/deck/fail, usbN_eject (N = 1-4)
+@@ -91,6 +91,7 @@
+     const UserSettingsPointer m_pConfig;
+ 
+     std::unique_ptr<ControlPushButton> m_pStartupQuantize;
++    std::unique_ptr<ControlPushButton> m_pStartupKeylock;
+     std::unique_ptr<ControlObject> m_pStartupTempo;
+     std::unique_ptr<ControlObject> m_pStartupTime;
+     std::unique_ptr<ControlObject> m_pXfCurve;
+@@ -107,6 +108,7 @@
+     QTimer m_usbTimer;
+     QTimer m_keepAwakeTimer;
+     QTimer m_powerTimer;
++    QTimer m_sleepNowTimer;
+     bool m_startupApplied;
+     bool m_returnToSettings;
+     bool m_forcedAsleep;
+diff --git a/src/grv6/grv6system.cpp b/src/grv6/grv6system.cpp
+--- a/src/grv6/grv6system.cpp
++++ b/src/grv6/grv6system.cpp
+@@ -2,7 +2,10 @@
+ 
+ #include <QApplication>
+ #include <QEvent>
++#include <QFile>
++#include <QLabel>
+ #include <QMap>
++#include <QPixmap>
+ #include <QProcess>
+ #include <QStorageInfo>
+ #include <QtDebug>
+@@ -33,7 +36,11 @@
+ // Settings tab TEMPO RANGE segments, as Mixxx rateRange values.
+ const double kTempoRanges[] = {0.06, 0.10, 0.16, 0.50};
+ // Settings tab SLEEP segments: OFF, then minutes.
+-const int kSleepMinutes[] = {0, 5, 10, 15, 30, 60};
++const int kSleepMinutes[] = {0, 10, 30, 60, 90};
++constexpr int kNumSleepSteps = 5;
++
++// Written when POWER OFF goes through; ~/.xinitrc does not start Mixxx again while it exists.
++const QString kPowerOffFlag = QStringLiteral("/tmp/grv6-poweroff");
+ 
+ ConfigKey key(const QString& item) {
+     return ConfigKey(kGroup, item);
+@@ -60,10 +67,16 @@
+           m_returnToSettings(false),
+           m_forcedAsleep(false),
+           m_wasPlaying(false) {
++    // A POWER OFF that did not go through must not stop the next start (see powerOff()).
++    QFile::remove(kPowerOffFlag);
++
+     // ---- saved settings (persistent controls)
+     m_pStartupQuantize = std::make_unique<ControlPushButton>(
+             key(QStringLiteral("startup_quantize")), true, 1.0);
+     m_pStartupQuantize->setButtonMode(ControlPushButton::TOGGLE);
++    m_pStartupKeylock = std::make_unique<ControlPushButton>(
++            key(QStringLiteral("startup_keylock")), true, 0.0);
++    m_pStartupKeylock->setButtonMode(ControlPushButton::TOGGLE);
+     m_pStartupTempo = std::make_unique<ControlObject>(
+             key(QStringLiteral("startup_tempo")), true, false, true, 1.0);
+     m_pStartupTime = std::make_unique<ControlObject>(
+@@ -84,9 +97,15 @@
+ 
+     // ---- actions
+     m_pSleepNow = std::make_unique<ControlPushButton>(key(QStringLiteral("sleep_now")));
++    m_sleepNowTimer.setSingleShot(true);
++    connect(&m_sleepNowTimer, &QTimer::timeout, this, [this]() {
++        sleepNow();
++    });
+     connect(m_pSleepNow.get(), &ControlObject::valueChanged, this, [this](double value) {
+-        if (value > 0.0) {
+-            sleepNow();
++        // On release, plus a moment: lifting the finger off the touch screen is input
++        // too, and input right after blanking woke the screen again at once.
++        if (value <= 0.0) {
++            m_sleepNowTimer.start(800);
+         }
+     });
+ 
+@@ -235,10 +254,12 @@
+ 
+ void Grv6System::applyStartupDefaults() {
+     const double quantize = m_pStartupQuantize->get() > 0.0 ? 1.0 : 0.0;
++    const double keylock = m_pStartupKeylock->get() > 0.0 ? 1.0 : 0.0;
+     const double rateRange = kTempoRanges[clampIndex(m_pStartupTempo->get(), 4)];
+     for (unsigned int i = 0; i < PlayerManager::numDecks(); ++i) {
+         const QString group = PlayerManager::groupForDeck(static_cast<int>(i));
+         setIfExists(ConfigKey(group, QStringLiteral("quantize")), quantize);
++        setIfExists(ConfigKey(group, QStringLiteral("keylock")), keylock);
+         setIfExists(ConfigKey(group, QStringLiteral("rateRange")), rateRange);
+     }
+ }
+@@ -262,7 +283,7 @@
+ }
+ 
+ void Grv6System::applySleepTimeout() {
+-    const int minutes = kSleepMinutes[clampIndex(m_pSleep->get(), 6)];
++    const int minutes = kSleepMinutes[clampIndex(m_pSleep->get(), kNumSleepSteps)];
+ #if defined(Q_OS_LINUX)
+     mixxx::ScreenSaverHelper::grv6SetSleepTimeout(minutes * 60);
+ #endif
+@@ -311,14 +332,45 @@
+     for (const QString& group : playerGroups()) {
+         setIfExists(ConfigKey(group, QStringLiteral("play")), 0.0);
+     }
+-    // Mixxx must exit normally to save its settings, so the power-off is
+-    // started first, delayed, and Mixxx is closed right after. ~/.xinitrc may
+-    // start Mixxx again meanwhile; the power-off ends that too.
+     qWarning() << "GRV6: POWER OFF held for 5 seconds - shutting down";
++
++    // The shutdown picture, GRV6/images/shutdown.png, over the whole window
++    // while Mixxx closes, and as the X desktop background (needs feh) so it
++    // stays on screen after Mixxx's window is gone, until the power is off.
++    const QString picture = m_pConfig->getSettingsPath() +
++            QStringLiteral("/skins/GRV6/images/shutdown.png");
++    auto* pCover = new QLabel(m_pMainWindow);
++    pCover->setStyleSheet(QStringLiteral("background-color: #050506; color: #e9e9ed; font-size: 40px;"));
++    pCover->setAlignment(Qt::AlignCenter);
++    const QPixmap pixmap(picture);
++    if (pixmap.isNull()) {
++        pCover->setText(QStringLiteral("SHUTTING DOWN"));
++    } else {
++        pCover->setPixmap(pixmap.scaled(m_pMainWindow->size(),
++                Qt::KeepAspectRatioByExpanding,
++                Qt::SmoothTransformation));
++    }
++    pCover->setGeometry(m_pMainWindow->rect());
++    pCover->raise();
++    pCover->show();
++    if (QFile::exists(picture)) {
++        QProcess::startDetached(QStringLiteral("feh"),
++                {QStringLiteral("--no-fehbg"), QStringLiteral("--bg-fill"), picture});
++    }
++
++    // Tell ~/.xinitrc not to start Mixxx again.
++    QFile flag(kPowerOffFlag);
++    if (flag.open(QIODevice::WriteOnly)) {
++        flag.close();
++    }
++
++    // Mixxx must exit normally to save its settings. The power-off waits for
++    // that (at most 30 s), then runs; Mixxx is closed right after starting it.
+     QProcess::startDetached(QStringLiteral("/bin/sh"),
+             {QStringLiteral("-c"),
+-                    QStringLiteral("sleep 15; sudo -n /usr/sbin/poweroff || systemctl poweroff")});
+-    QTimer::singleShot(500, m_pMainWindow, [this]() {
++                    QStringLiteral("for i in $(seq 60); do pgrep -x mixxx >/dev/null || break; "
++                                   "sleep 0.5; done; sudo -n /usr/sbin/poweroff || systemctl poweroff")});
++    QTimer::singleShot(800, m_pMainWindow, [this]() {
+         m_pMainWindow->close();
+     });
+ }
