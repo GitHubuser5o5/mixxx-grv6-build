@@ -1,0 +1,122 @@
+<!DOCTYPE template>
+<!--
+  Narrow left column panel of one deck: ON AIR icon, DECK number, CUE, PLAY.
+  Variable: channel (1-4).
+  The ON AIR icon is lit while the channel volume fader is above 0 (was: USB icon, lit
+  while a track is loaded).
+-->
+<Template>
+  <WidgetGroup>
+    <ObjectName>ColPanel</ObjectName>
+    <Layout>vertical</Layout>
+    <SizePolicy>me,me</SizePolicy>
+    <Children>
+
+      <WidgetGroup>
+        <ObjectName>ColSection</ObjectName>
+        <Layout>vertical</Layout>
+        <SizePolicy>me,me</SizePolicy>
+        <Children>
+          <Label>
+            <ObjectName>OnAirIcon</ObjectName>
+            <Size>46f,46f</Size>
+            <Connection>
+              <ConfigKey>[Channel<Variable name="channel"/>],volume</ConfigKey>
+              <Transform><IsEqual>0</IsEqual><Not/></Transform>
+              <BindProperty>highlight</BindProperty>
+            </Connection>
+          </Label>
+          <Label><ObjectName>ColCaption</ObjectName><Text>ON AIR</Text></Label>
+        </Children>
+      </WidgetGroup>
+
+      <Label><ObjectName>HRule</ObjectName><Size>0me,1f</Size></Label>
+
+      <WidgetGroup>
+        <ObjectName>ColSection</ObjectName>
+        <Layout>vertical</Layout>
+        <SizePolicy>me,me</SizePolicy>
+        <Children>
+          <Label>
+            <ObjectName>DeckBadgeBig</ObjectName>
+            <Size>46f,46f</Size>
+            <Text><Variable name="channel"/></Text>
+          </Label>
+          <Label><ObjectName>ColCaption</ObjectName><Text>DECK</Text></Label>
+        </Children>
+      </WidgetGroup>
+
+      <Label><ObjectName>HRule</ObjectName><Size>0me,1f</Size></Label>
+
+      <WidgetGroup>
+        <ObjectName>ColSection</ObjectName>
+        <Layout>vertical</Layout>
+        <SizePolicy>me,me</SizePolicy>
+        <Children>
+          <PushButton>
+            <ObjectName>CueButton</ObjectName>
+            <Size>46f,46f</Size>
+            <NumberStates>2</NumberStates>
+            <State>
+              <Number>0</Number>
+              <Unpressed><Variable name="img"/>/cue_off.png</Unpressed>
+              <Pressed><Variable name="img"/>/cue_on.png</Pressed>
+            </State>
+            <State>
+              <Number>1</Number>
+              <Unpressed><Variable name="img"/>/cue_on.png</Unpressed>
+              <Pressed><Variable name="img"/>/cue_on.png</Pressed>
+            </State>
+            <!-- headphone cue (PFL), same as the CH CUE button on the controller; lit = channel is in the headphones -->
+            <Connection>
+              <ConfigKey>[Channel<Variable name="channel"/>],pfl</ConfigKey>
+            </Connection>
+          </PushButton>
+          <Label><ObjectName>ColCaption</ObjectName><Text>CUE</Text></Label>
+        </Children>
+      </WidgetGroup>
+
+      <Label><ObjectName>HRule</ObjectName><Size>0me,1f</Size></Label>
+
+      <WidgetGroup>
+        <ObjectName>ColSection</ObjectName>
+        <Layout>vertical</Layout>
+        <SizePolicy>me,me</SizePolicy>
+        <Children>
+          <PushButton>
+            <ObjectName>PlayButton</ObjectName>
+            <Size>46f,46f</Size>
+            <NumberStates>2</NumberStates>
+            <State>
+              <Number>0</Number>
+              <Unpressed><Variable name="img"/>/play_off.png</Unpressed>
+              <Pressed><Variable name="img"/>/play_on.png</Pressed>
+            </State>
+            <State>
+              <Number>1</Number>
+              <Unpressed><Variable name="img"/>/play_on.png</Unpressed>
+              <Pressed><Variable name="img"/>/play_on.png</Pressed>
+            </State>
+            <Connection>
+              <ConfigKey>[Channel<Variable name="channel"/>],play</ConfigKey>
+              <ButtonState>LeftButton</ButtonState>
+            </Connection>
+            <Connection>
+              <ConfigKey>[Channel<Variable name="channel"/>],play_indicator</ConfigKey>
+              <ConnectValueFromWidget>false</ConnectValueFromWidget>
+            </Connection>
+          </PushButton>
+          <Label>
+            <ObjectName>ColCaptionPlay</ObjectName>
+            <Text>PLAY</Text>
+            <Connection>
+              <ConfigKey>[Channel<Variable name="channel"/>],play</ConfigKey>
+              <BindProperty>highlight</BindProperty>
+            </Connection>
+          </Label>
+        </Children>
+      </WidgetGroup>
+
+    </Children>
+  </WidgetGroup>
+</Template>

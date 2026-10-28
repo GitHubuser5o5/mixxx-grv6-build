@@ -1,0 +1,44 @@
+<!DOCTYPE template>
+<!--
+  Scrolling waveform of one deck. Variable: channel (1-4).
+  Colours: none set on purpose, so Mixxx draws its normal waveform in the type chosen in
+  Preferences > Waveforms (RGB = red/green/blue by frequency).
+-->
+<Template>
+  <Visual>
+    <TooltipId>waveform_display</TooltipId>
+    <ObjectName>Waveform</ObjectName>
+    <Channel><Variable name="channel"/></Channel>
+    <BgColor><Variable name="wave_bg"/></BgColor>
+    <BeatColor><Variable name="wave_beat"/></BeatColor>
+    <PlayPosColor><Variable name="wave_playpos"/></PlayPosColor>
+    <AxesColor>#00000000</AxesColor>
+    <SignalColor>#007BCD</SignalColor>
+    <SignalHighColor></SignalHighColor>
+    <SignalMidColor></SignalMidColor>
+    <SignalLowColor></SignalLowColor>
+    <SignalRGBHighColor></SignalRGBHighColor>
+    <SignalRGBMidColor></SignalRGBMidColor>
+    <SignalRGBLowColor></SignalRGBLowColor>
+    <Mark><Control>cue_point</Control><Text>CUE</Text><Color><Variable name="accent"/></Color><TextColor><Variable name="accent"/></TextColor><Align>bottom</Align></Mark>
+    <Mark><Control>hotcue_1_position</Control><Text>HOT 1</Text><Color>#f44040</Color><TextColor>#0a0a0b</TextColor><Align>top</Align></Mark>
+    <Mark><Control>hotcue_2_position</Control><Text>HOT 2</Text><Color>#0ddcf2</Color><TextColor>#0a0a0b</TextColor><Align>top</Align></Mark>
+    <Mark><Control>hotcue_3_position</Control><Text>HOT 3</Text><Color>#a5df13</Color><TextColor>#0a0a0b</TextColor><Align>top</Align></Mark>
+    <Mark><Control>hotcue_4_position</Control><Text>HOT 4</Text><Color>#9d4cfd</Color><TextColor>#0a0a0b</TextColor><Align>top</Align></Mark>
+    <Mark><Control>hotcue_5_position</Control><Text>HOT 5</Text><Color>#3fec2b</Color><TextColor>#0a0a0b</TextColor><Align>top</Align></Mark>
+    <Mark><Control>hotcue_6_position</Control><Text>HOT 6</Text><Color>#e6681c</Color><TextColor>#0a0a0b</TextColor><Align>top</Align></Mark>
+    <Mark><Control>hotcue_7_position</Control><Text>HOT 7</Text><Color>#2749c8</Color><TextColor>#ffffff</TextColor><Align>top</Align></Mark>
+    <Mark><Control>hotcue_8_position</Control><Text>HOT 8</Text><Color>#c7b205</Color><TextColor>#0a0a0b</TextColor><Align>top</Align></Mark>
+    <Mark><Control>loop_start_position</Control><Text>IN</Text><Color><Variable name="accent"/></Color><TextColor><Variable name="accent"/></TextColor><Align>bottom</Align></Mark>
+    <Mark><Control>loop_end_position</Control><Text>OUT</Text><Color><Variable name="accent"/></Color><TextColor><Variable name="accent"/></TextColor><Align>bottom</Align></Mark>
+    <MarkRange>
+      <StartControl>loop_start_position</StartControl>
+      <EndControl>loop_end_position</EndControl>
+      <EnabledControl>loop_enabled</EnabledControl>
+      <Color><Variable name="accent"/></Color>
+      <Opacity>0.25</Opacity>
+      <DisabledColor>#71747b</DisabledColor>
+      <DisabledOpacity>0.12</DisabledOpacity>
+    </MarkRange>
+  </Visual>
+</Template>

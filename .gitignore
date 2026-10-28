@@ -1,5 +1,8 @@
 src/
 work/
 stable2/
+stable3/
 *.zip
 *.deb
+__pycache__/
+*.pyc

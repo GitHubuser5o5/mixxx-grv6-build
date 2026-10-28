@@ -1,0 +1,521 @@
+<!DOCTYPE template>
+<!--
+  Big deck panel at the bottom: cover art, title/artist, time, BPM/tempo, key, meter, buttons.
+  Variable: channel (1-4).
+  Empty deck: same layout as a loaded deck, values replaced by "xxx" placeholders (visible when track_loaded is 0).
+-->
+<Template>
+  <TrackWidgetGroup>
+    <TrackColorAlpha><Variable name="card_tint"/></TrackColorAlpha>
+    <ObjectName>DeckPanel</ObjectName>
+    <Group>[Channel<Variable name="channel"/>]</Group>
+    <Layout>horizontal</Layout>
+    <SizePolicy>me,f</SizePolicy>
+    <MinimumSize>0,270</MinimumSize>
+    <MaximumSize>-1,270</MaximumSize>
+    <Children>
+
+      <!-- cover, or a plain grey box when empty -->
+      <CoverArt>
+        <ObjectName>DeckCover</ObjectName>
+        <TooltipId>coverart</TooltipId>
+        <Size>270f,270f</Size>
+        <Group>[Channel<Variable name="channel"/>]</Group>
+        <Connection>
+          <ConfigKey>[Channel<Variable name="channel"/>],track_loaded</ConfigKey>
+          <BindProperty>visible</BindProperty>
+        </Connection>
+      </CoverArt>
+      <Label>
+        <ObjectName>NoCover</ObjectName>
+        <Size>270f,270f</Size>
+        <Text>NO TRACK LOADED</Text>
+        <Connection>
+          <ConfigKey>[Channel<Variable name="channel"/>],track_loaded</ConfigKey>
+          <Transform><Not/></Transform>
+          <BindProperty>visible</BindProperty>
+        </Connection>
+      </Label>
+
+      <WidgetGroup>
+        <ObjectName>DeckRight</ObjectName>
+        <Layout>vertical</Layout>
+        <SizePolicy>me,me</SizePolicy>
+        <Children>
+
+          <!-- header: badge, title, artist -->
+          <WidgetGroup>
+            <ObjectName>DeckHeader</ObjectName>
+            <Layout>horizontal</Layout>
+            <SizePolicy>me,f</SizePolicy>
+            <MinimumSize>0,42</MinimumSize>
+            <MaximumSize>-1,42</MaximumSize>
+            <Children>
+              <Label>
+                <ObjectName>DeckBadge</ObjectName>
+                <Size>28f,28f</Size>
+                <Text><Variable name="channel"/></Text>
+              </Label>
+              <TrackProperty>
+                <ObjectName>DeckTitle</ObjectName>
+                <TooltipId>track_title</TooltipId>
+                <SizePolicy>me,me</SizePolicy>
+                <MinimumSize>1</MinimumSize>
+                <Property>title</Property>
+                <Group>[Channel<Variable name="channel"/>]</Group>
+                <Elide>right</Elide>
+                <Connection>
+                  <ConfigKey>[Channel<Variable name="channel"/>],track_loaded</ConfigKey>
+                  <BindProperty>visible</BindProperty>
+                </Connection>
+              </TrackProperty>
+              <Label>
+                <ObjectName>DeckTitle</ObjectName>
+                <Text>No track loaded</Text>
+                <SizePolicy>me,me</SizePolicy>
+                <Connection>
+                  <ConfigKey>[Channel<Variable name="channel"/>],track_loaded</ConfigKey>
+                  <Transform><Not/></Transform>
+                  <BindProperty>visible</BindProperty>
+                </Connection>
+              </Label>
+              <TrackProperty>
+                <ObjectName>DeckArtist</ObjectName>
+                <TooltipId>track_artist</TooltipId>
+                <Size>300f,0me</Size>
+                <Property>artist</Property>
+                <Group>[Channel<Variable name="channel"/>]</Group>
+                <Elide>right</Elide>
+                <Connection>
+                  <ConfigKey>[Channel<Variable name="channel"/>],track_loaded</ConfigKey>
+                  <BindProperty>visible</BindProperty>
+                </Connection>
+              </TrackProperty>
+              <Label>
+                <ObjectName>DeckArtist</ObjectName>
+                <Text>xxxxx</Text>
+                <Size>300f,0me</Size>
+                <Connection>
+                  <ConfigKey>[Channel<Variable name="channel"/>],track_loaded</ConfigKey>
+                  <Transform><Not/></Transform>
+                  <BindProperty>visible</BindProperty>
+                </Connection>
+              </Label>
+            </Children>
+          </WidgetGroup>
+
+          <WidgetGroup>
+            <ObjectName>Transparent</ObjectName>
+            <Layout>horizontal</Layout>
+            <SizePolicy>me,me</SizePolicy>
+            <Children>
+
+              <!-- REMAIN / TIME -->
+              <WidgetGroup>
+                <ObjectName>Box</ObjectName>
+                <Layout>vertical</Layout>
+                <Size>299f,0me</Size>
+                <Children>
+                  <WidgetGroup>
+                    <ObjectName>Transparent</ObjectName>
+                    <Layout>horizontal</Layout>
+                    <SizePolicy>me,max</SizePolicy>
+                    <Children>
+                      <Label>
+                        <ObjectName>BoxCaptionAccent</ObjectName>
+                        <Text>REMAIN</Text>
+                        <Connection>
+                          <ConfigKey>[Controls],ShowDurationRemaining</ConfigKey>
+                          <Transform><IsEqual>1</IsEqual></Transform>
+                          <BindProperty>visible</BindProperty>
+                        </Connection>
+                      </Label>
+                      <Label>
+                        <ObjectName>BoxCaptionAccent</ObjectName>
+                        <Text>TIME</Text>
+                        <Connection>
+                          <ConfigKey>[Controls],ShowDurationRemaining</ConfigKey>
+                          <Transform><IsEqual>0</IsEqual></Transform>
+                          <BindProperty>visible</BindProperty>
+                        </Connection>
+                      </Label>
+                    </Children>
+                  </WidgetGroup>
+                  <Template src="skin:time_number.xml">
+                    <SetVariable name="oname">BigTime</SetVariable>
+                    <SetVariable name="minw">0</SetVariable>
+                  </Template>
+                  <Label>
+                    <ObjectName>BigTime</ObjectName>
+                    <Text>-:--</Text>
+                    <SizePolicy>me,me</SizePolicy>
+                    <Connection>
+                      <ConfigKey>[Channel<Variable name="channel"/>],track_loaded</ConfigKey>
+                      <Transform><Not/></Transform>
+                      <BindProperty>visible</BindProperty>
+                    </Connection>
+                  </Label>
+                  <WidgetGroup>
+                    <ObjectName>Transparent</ObjectName>
+                    <Layout>horizontal</Layout>
+                    <SizePolicy>me,max</SizePolicy>
+                    <Children>
+                      <Label><ObjectName>BoxFoot</ObjectName><Text>TRACK </Text></Label>
+                      <TrackProperty>
+                        <ObjectName>BoxFoot</ObjectName>
+                        <SizePolicy>min,min</SizePolicy>
+                        <Property>trackNumber</Property>
+                        <Group>[Channel<Variable name="channel"/>]</Group>
+                        <Connection>
+                          <ConfigKey>[Channel<Variable name="channel"/>],track_loaded</ConfigKey>
+                          <BindProperty>visible</BindProperty>
+                        </Connection>
+                      </TrackProperty>
+                      <Label>
+                        <ObjectName>BoxFoot</ObjectName>
+                        <Text>x</Text>
+                        <SizePolicy>min,min</SizePolicy>
+                        <Connection>
+                          <ConfigKey>[Channel<Variable name="channel"/>],track_loaded</ConfigKey>
+                          <Transform><Not/></Transform>
+                          <BindProperty>visible</BindProperty>
+                        </Connection>
+                      </Label>
+                      <Label><ObjectName>BoxFoot</ObjectName><Text>  &#183;  </Text></Label>
+                      <TrackProperty>
+                        <ObjectName>BoxFoot</ObjectName>
+                        <SizePolicy>me,min</SizePolicy>
+                        <Property>durationTextSeconds</Property>
+                        <Group>[Channel<Variable name="channel"/>]</Group>
+                        <Connection>
+                          <ConfigKey>[Channel<Variable name="channel"/>],track_loaded</ConfigKey>
+                          <BindProperty>visible</BindProperty>
+                        </Connection>
+                      </TrackProperty>
+                      <Label>
+                        <ObjectName>BoxFoot</ObjectName>
+                        <Text>x:xx</Text>
+                        <SizePolicy>me,min</SizePolicy>
+                        <Connection>
+                          <ConfigKey>[Channel<Variable name="channel"/>],track_loaded</ConfigKey>
+                          <Transform><Not/></Transform>
+                          <BindProperty>visible</BindProperty>
+                        </Connection>
+                      </Label>
+                    </Children>
+                  </WidgetGroup>
+                </Children>
+              </WidgetGroup>
+
+              <!-- BPM, tempo -->
+              <WidgetGroup>
+                <ObjectName>Box</ObjectName>
+                <Layout>vertical</Layout>
+                <SizePolicy>me,me</SizePolicy>
+                <Children>
+                  <WidgetGroup>
+                    <ObjectName>Transparent</ObjectName>
+                    <Layout>horizontal</Layout>
+                    <SizePolicy>me,max</SizePolicy>
+                    <Children>
+                      <Label><ObjectName>BoxCaption</ObjectName><Text>BPM</Text></Label>
+                      <Label><ObjectName>Spacer</ObjectName><SizePolicy>me,min</SizePolicy></Label>
+                      <Label>
+                        <ObjectName>TagLeader</ObjectName>
+                        <Size>72f,22f</Size>
+                        <Text>LEADER</Text>
+                        <Connection>
+                          <ConfigKey>[Channel<Variable name="channel"/>],sync_leader</ConfigKey>
+                          <BindProperty>visible</BindProperty>
+                        </Connection>
+                      </Label>
+                      <Label>
+                        <ObjectName>TagFollower</ObjectName>
+                        <Size>72f,22f</Size>
+                        <Text>SYNC</Text>
+                        <Connection>
+                          <ConfigKey>[Channel<Variable name="channel"/>],sync_mode</ConfigKey>
+                          <Transform><IsEqual>1</IsEqual></Transform>
+                          <BindProperty>visible</BindProperty>
+                        </Connection>
+                      </Label>
+                    </Children>
+                  </WidgetGroup>
+                  <!-- "bpm" (live, follows sync) instead of "visual_bpm" (updated more slowly), one decimal -->
+                  <NumberBpm>
+                    <ObjectName>BigBpm</ObjectName>
+                    <TooltipId>visual_bpm</TooltipId>
+                    <Group>[Channel<Variable name="channel"/>]</Group>
+                    <NumberOfDigits>1</NumberOfDigits>
+                    <SizePolicy>me,me</SizePolicy>
+                    <Connection>
+                      <ConfigKey>[Channel<Variable name="channel"/>],bpm</ConfigKey>
+                    </Connection>
+                    <Connection>
+                      <ConfigKey>[Channel<Variable name="channel"/>],track_loaded</ConfigKey>
+                      <BindProperty>visible</BindProperty>
+                    </Connection>
+                  </NumberBpm>
+                  <Label>
+                    <ObjectName>BigBpm</ObjectName>
+                    <Text>xxx</Text>
+                    <SizePolicy>me,me</SizePolicy>
+                    <Connection>
+                      <ConfigKey>[Channel<Variable name="channel"/>],track_loaded</ConfigKey>
+                      <Transform><Not/></Transform>
+                      <BindProperty>visible</BindProperty>
+                    </Connection>
+                  </Label>
+                  <Label><ObjectName>HRule</ObjectName><Size>0me,1f</Size></Label>
+                  <WidgetGroup>
+                    <ObjectName>Transparent</ObjectName>
+                    <Layout>horizontal</Layout>
+                    <SizePolicy>me,max</SizePolicy>
+                    <Children>
+                      <NumberRate>
+                        <ObjectName>TempoValue</ObjectName>
+                        <TooltipId>rate_display</TooltipId>
+                        <Channel><Variable name="channel"/></Channel>
+                        <NumberOfDigits>2</NumberOfDigits>
+                        <SizePolicy>min,min</SizePolicy>
+                        <Connection>
+                          <ConfigKey>[Channel<Variable name="channel"/>],track_loaded</ConfigKey>
+                          <BindProperty>visible</BindProperty>
+                        </Connection>
+                      </NumberRate>
+                      <Label>
+                        <ObjectName>TempoValue</ObjectName>
+                        <Text>x.xx</Text>
+                        <SizePolicy>min,min</SizePolicy>
+                        <Connection>
+                          <ConfigKey>[Channel<Variable name="channel"/>],track_loaded</ConfigKey>
+                          <Transform><Not/></Transform>
+                          <BindProperty>visible</BindProperty>
+                        </Connection>
+                      </Label>
+                      <Label><ObjectName>TempoPercent</ObjectName><Text>%</Text></Label>
+                      <Label><ObjectName>Spacer</ObjectName><SizePolicy>me,min</SizePolicy></Label>
+                      <WidgetGroup>
+                        <ObjectName>TagRange</ObjectName>
+                        <Layout>horizontal</Layout>
+                        <SizePolicy>min,min</SizePolicy>
+                        <Children>
+                          <Label><ObjectName>TagRangeText</ObjectName><Text>&#177;</Text></Label>
+                          <RateRange>
+                            <ObjectName>TagRangeText</ObjectName>
+                            <TooltipId>rate_range_display</TooltipId>
+                            <Channel><Variable name="channel"/></Channel>
+                            <Display>range</Display>
+                          </RateRange>
+                        </Children>
+                      </WidgetGroup>
+                    </Children>
+                  </WidgetGroup>
+                </Children>
+              </WidgetGroup>
+
+              <!-- KEY -->
+              <WidgetGroup>
+                <ObjectName>Box</ObjectName>
+                <Layout>vertical</Layout>
+                <Size>96f,0me</Size>
+                <Children>
+                  <Label><ObjectName>BoxCaption</ObjectName><Text>KEY</Text></Label>
+                  <Key>
+                    <ObjectName>BigKey</ObjectName>
+                    <TooltipId>visual_key</TooltipId>
+                    <Group>[Channel<Variable name="channel"/>]</Group>
+                    <DisplayCents>false</DisplayCents>
+                    <SizePolicy>me,me</SizePolicy>
+                    <Connection>
+                      <ConfigKey>[Channel<Variable name="channel"/>],visual_key</ConfigKey>
+                    </Connection>
+                    <Connection>
+                      <ConfigKey>[Channel<Variable name="channel"/>],track_loaded</ConfigKey>
+                      <BindProperty>visible</BindProperty>
+                    </Connection>
+                  </Key>
+                  <Label>
+                    <ObjectName>BigKey</ObjectName>
+                    <Text>xx</Text>
+                    <SizePolicy>me,me</SizePolicy>
+                    <Connection>
+                      <ConfigKey>[Channel<Variable name="channel"/>],track_loaded</ConfigKey>
+                      <Transform><Not/></Transform>
+                      <BindProperty>visible</BindProperty>
+                    </Connection>
+                  </Label>
+                  <!-- Only while the key is transposed ([ChannelN],pitch is not 0): original key and the shift in semitones -->
+                  <WidgetGroup>
+                    <ObjectName>KeyShiftBox</ObjectName>
+                    <Layout>vertical</Layout>
+                    <SizePolicy>me,max</SizePolicy>
+                    <Children>
+                      <Label><ObjectName>KeyShiftCaption</ObjectName><Text>ORIGINAL</Text></Label>
+                      <Key>
+                        <ObjectName>KeyOrig</ObjectName>
+                        <TooltipId>track_key</TooltipId>
+                        <Group>[Channel<Variable name="channel"/>]</Group>
+                        <DisplayCents>false</DisplayCents>
+                        <SizePolicy>me,min</SizePolicy>
+                        <Connection>
+                          <ConfigKey>[Channel<Variable name="channel"/>],file_key</ConfigKey>
+                        </Connection>
+                      </Key>
+                      <Label><ObjectName>KeyShiftCaption</ObjectName><Text>SHIFT (semitones)</Text></Label>
+                      <Number>
+                        <ObjectName>KeyShiftValue</ObjectName>
+                        <TooltipId>pitch</TooltipId>
+                        <NumberOfDigits>1</NumberOfDigits>
+                        <SizePolicy>me,min</SizePolicy>
+                        <Connection>
+                          <ConfigKey>[Channel<Variable name="channel"/>],pitch</ConfigKey>
+                        </Connection>
+                      </Number>
+                    </Children>
+                    <Connection>
+                      <ConfigKey>[Channel<Variable name="channel"/>],pitch</ConfigKey>
+                      <!-- visible connections compare the normalised value: pitch is -6..+6, so "no shift" is 0.5 -->
+                      <Transform><IsEqual>0.5</IsEqual><Not/></Transform>
+                      <BindProperty>visible</BindProperty>
+                    </Connection>
+                  </WidgetGroup>
+                  <Label>
+                    <ObjectName>TagMt</ObjectName>
+                    <Text>MT</Text>
+                    <Connection>
+                      <ConfigKey>[Channel<Variable name="channel"/>],keylock</ConfigKey>
+                      <BindProperty>highlight</BindProperty>
+                    </Connection>
+                  </Label>
+                </Children>
+              </WidgetGroup>
+
+              <!-- channel meter -->
+              <WidgetGroup>
+                <ObjectName>Box</ObjectName>
+                <Layout>horizontal</Layout>
+                <Size>26f,0me</Size>
+                <Children>
+                  <VuMeter>
+                    <ObjectName>DeckVu</ObjectName>
+                    <TooltipId>channel_VuMeter</TooltipId>
+                    <MinimumSize>6,172</MinimumSize>
+                    <MaximumSize>6,172</MaximumSize>
+                    <SizePolicy>f,f</SizePolicy>
+                    <PathVu><Variable name="img"/>/vu_deck.png</PathVu>
+                    <PathBack><Variable name="img"/>/vu_deck_bg.png</PathBack>
+                    <Horizontal>false</Horizontal>
+                    <PeakHoldSize>4</PeakHoldSize>
+                    <PeakHoldTime>500</PeakHoldTime>
+                    <PeakFallTime>30</PeakFallTime>
+                    <PeakFallStep>1</PeakFallStep>
+                    <Connection>
+                      <ConfigKey>[Channel<Variable name="channel"/>],vu_meter_left</ConfigKey>
+                    </Connection>
+                  </VuMeter>
+                  <VuMeter>
+                    <ObjectName>DeckVu</ObjectName>
+                    <TooltipId>channel_VuMeter</TooltipId>
+                    <MinimumSize>6,172</MinimumSize>
+                    <MaximumSize>6,172</MaximumSize>
+                    <SizePolicy>f,f</SizePolicy>
+                    <PathVu><Variable name="img"/>/vu_deck.png</PathVu>
+                    <PathBack><Variable name="img"/>/vu_deck_bg.png</PathBack>
+                    <Horizontal>false</Horizontal>
+                    <PeakHoldSize>4</PeakHoldSize>
+                    <PeakHoldTime>500</PeakHoldTime>
+                    <PeakFallTime>30</PeakFallTime>
+                    <PeakFallStep>1</PeakFallStep>
+                    <Connection>
+                      <ConfigKey>[Channel<Variable name="channel"/>],vu_meter_right</ConfigKey>
+                    </Connection>
+                  </VuMeter>
+                </Children>
+              </WidgetGroup>
+
+            </Children>
+          </WidgetGroup>
+
+          <!-- buttons -->
+          <WidgetGroup>
+            <ObjectName>Transparent</ObjectName>
+            <Layout>horizontal</Layout>
+            <SizePolicy>me,f</SizePolicy>
+            <MinimumSize>0,32</MinimumSize>
+            <MaximumSize>-1,32</MaximumSize>
+            <Children>
+              <PushButton>
+                <ObjectName>DeckButton</ObjectName>
+                <TooltipId>sync_enabled</TooltipId>
+                <SizePolicy>me,me</SizePolicy>
+                <NumberStates>2</NumberStates>
+                <State><Number>0</Number><Text>SYNC</Text></State>
+                <State><Number>1</Number><Text>SYNC</Text></State>
+                <Connection>
+                  <ConfigKey>[Channel<Variable name="channel"/>],sync_enabled</ConfigKey>
+                  <ButtonState>LeftButton</ButtonState>
+                </Connection>
+              </PushButton>
+              <PushButton>
+                <ObjectName>DeckButton</ObjectName>
+                <TooltipId>quantize</TooltipId>
+                <SizePolicy>me,me</SizePolicy>
+                <NumberStates>2</NumberStates>
+                <State><Number>0</Number><Text>QUANT</Text></State>
+                <State><Number>1</Number><Text>QUANT</Text></State>
+                <Connection>
+                  <ConfigKey>[Channel<Variable name="channel"/>],quantize</ConfigKey>
+                </Connection>
+              </PushButton>
+              <PushButton>
+                <ObjectName>DeckButton</ObjectName>
+                <TooltipId>keylock</TooltipId>
+                <SizePolicy>me,me</SizePolicy>
+                <NumberStates>2</NumberStates>
+                <State><Number>0</Number><Text>KEYLOCK</Text></State>
+                <State><Number>1</Number><Text>KEYLOCK</Text></State>
+                <Connection>
+                  <ConfigKey>[Channel<Variable name="channel"/>],keylock</ConfigKey>
+                </Connection>
+              </PushButton>
+              <PushButton>
+                <ObjectName>DeckButton</ObjectName>
+                <TooltipId>slip_mode</TooltipId>
+                <SizePolicy>me,me</SizePolicy>
+                <NumberStates>2</NumberStates>
+                <State><Number>0</Number><Text>SLIP</Text></State>
+                <State><Number>1</Number><Text>SLIP</Text></State>
+                <Connection>
+                  <ConfigKey>[Channel<Variable name="channel"/>],slip_enabled</ConfigKey>
+                </Connection>
+              </PushButton>
+              <WidgetGroup>
+                <ObjectName>LoopBox</ObjectName>
+                <Layout>horizontal</Layout>
+                <Size>181f,0me</Size>
+                <Children>
+                  <Label>
+                    <ObjectName>LoopCaption</ObjectName>
+                    <Text>LOOP</Text>
+                    <Connection>
+                      <ConfigKey>[Channel<Variable name="channel"/>],loop_enabled</ConfigKey>
+                      <BindProperty>highlight</BindProperty>
+                    </Connection>
+                  </Label>
+                  <Template src="skin:loop_size.xml"/>
+                </Children>
+                <Connection>
+                  <ConfigKey>[Channel<Variable name="channel"/>],loop_enabled</ConfigKey>
+                  <BindProperty>highlight</BindProperty>
+                </Connection>
+              </WidgetGroup>
+            </Children>
+          </WidgetGroup>
+
+        </Children>
+      </WidgetGroup>
+
+    </Children>
+  </TrackWidgetGroup>
+</Template>

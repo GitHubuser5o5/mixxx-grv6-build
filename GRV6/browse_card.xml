@@ -1,0 +1,243 @@
+<!DOCTYPE template>
+<!--
+  Deck card at the top of the Browse tab. Variable: channel (1-4).
+  Same layout for loaded and empty decks (empty = No track loaded, xxxxx, xxx, xx and a dash for the time).
+-->
+<Template>
+  <TrackWidgetGroup>
+    <TrackColorAlpha><Variable name="card_tint"/></TrackColorAlpha>
+    <ObjectName>BrowseCard</ObjectName>
+    <Group>[Channel<Variable name="channel"/>]</Group>
+    <Layout>horizontal</Layout>
+    <SizePolicy>me,me</SizePolicy>
+    <Children>
+
+      <CoverArt>
+        <ObjectName>CardCover</ObjectName>
+        <TooltipId>coverart</TooltipId>
+        <Size>90f,90f</Size>
+        <Group>[Channel<Variable name="channel"/>]</Group>
+        <Connection>
+          <ConfigKey>[Channel<Variable name="channel"/>],track_loaded</ConfigKey>
+          <BindProperty>visible</BindProperty>
+        </Connection>
+      </CoverArt>
+      <Label>
+        <ObjectName>NoCoverSmall</ObjectName>
+        <Size>90f,90f</Size>
+        <Connection>
+          <ConfigKey>[Channel<Variable name="channel"/>],track_loaded</ConfigKey>
+          <Transform><Not/></Transform>
+          <BindProperty>visible</BindProperty>
+        </Connection>
+      </Label>
+
+      <Label>
+        <ObjectName>DeckBadge</ObjectName>
+        <Size>30f,30f</Size>
+        <Text><Variable name="channel"/></Text>
+      </Label>
+
+      <WidgetGroup>
+        <ObjectName>Transparent</ObjectName>
+        <Layout>vertical</Layout>
+        <SizePolicy>me,me</SizePolicy>
+        <Children>
+          <TrackProperty>
+            <ObjectName>CardTitle</ObjectName>
+            <SizePolicy>me,me</SizePolicy>
+            <MinimumSize>1</MinimumSize>
+            <Property>title</Property>
+            <Group>[Channel<Variable name="channel"/>]</Group>
+            <Elide>right</Elide>
+            <Connection>
+              <ConfigKey>[Channel<Variable name="channel"/>],track_loaded</ConfigKey>
+              <BindProperty>visible</BindProperty>
+            </Connection>
+          </TrackProperty>
+          <Label>
+            <ObjectName>CardTitle</ObjectName>
+            <Text>No track loaded</Text>
+            <SizePolicy>me,me</SizePolicy>
+            <Connection>
+              <ConfigKey>[Channel<Variable name="channel"/>],track_loaded</ConfigKey>
+              <Transform><Not/></Transform>
+              <BindProperty>visible</BindProperty>
+            </Connection>
+          </Label>
+          <TrackProperty>
+            <ObjectName>CardArtist</ObjectName>
+            <SizePolicy>me,me</SizePolicy>
+            <MinimumSize>1</MinimumSize>
+            <Property>artist</Property>
+            <Group>[Channel<Variable name="channel"/>]</Group>
+            <Elide>right</Elide>
+            <Connection>
+              <ConfigKey>[Channel<Variable name="channel"/>],track_loaded</ConfigKey>
+              <BindProperty>visible</BindProperty>
+            </Connection>
+          </TrackProperty>
+          <Label>
+            <ObjectName>CardArtist</ObjectName>
+            <Text>xxxxx</Text>
+            <SizePolicy>me,me</SizePolicy>
+            <Connection>
+              <ConfigKey>[Channel<Variable name="channel"/>],track_loaded</ConfigKey>
+              <Transform><Not/></Transform>
+              <BindProperty>visible</BindProperty>
+            </Connection>
+          </Label>
+          <VuMeter>
+            <ObjectName>CardProgress</ObjectName>
+            <MinimumSize>320,6</MinimumSize>
+            <MaximumSize>320,6</MaximumSize>
+            <SizePolicy>f,f</SizePolicy>
+            <PathVu><Variable name="img"/>/progress_card.png</PathVu>
+            <PathBack><Variable name="img"/>/progress_card_bg.png</PathBack>
+            <Horizontal>true</Horizontal>
+            <PeakHoldSize>0</PeakHoldSize>
+            <Connection>
+              <ConfigKey>[Channel<Variable name="channel"/>],playposition</ConfigKey>
+            </Connection>
+          </VuMeter>
+        </Children>
+      </WidgetGroup>
+
+      <!-- time -->
+      <WidgetGroup>
+        <ObjectName>Transparent</ObjectName>
+        <Layout>vertical</Layout>
+        <Size>160f,0me</Size>
+        <Children>
+          <Template src="skin:time_number.xml">
+            <SetVariable name="oname">CardTime</SetVariable>
+            <SetVariable name="minw">150</SetVariable>
+          </Template>
+          <Label>
+            <ObjectName>CardTime</ObjectName>
+            <Text>-:--</Text>
+            <SizePolicy>me,me</SizePolicy>
+            <Connection>
+              <ConfigKey>[Channel<Variable name="channel"/>],track_loaded</ConfigKey>
+              <Transform><Not/></Transform>
+              <BindProperty>visible</BindProperty>
+            </Connection>
+          </Label>
+          <Label>
+            <ObjectName>CardCaption</ObjectName>
+            <Text>REMAIN</Text>
+            <Connection>
+              <ConfigKey>[Controls],ShowDurationRemaining</ConfigKey>
+              <Transform><IsEqual>1</IsEqual></Transform>
+              <BindProperty>visible</BindProperty>
+            </Connection>
+          </Label>
+          <Label>
+            <ObjectName>CardCaption</ObjectName>
+            <Text>TIME</Text>
+            <Connection>
+              <ConfigKey>[Controls],ShowDurationRemaining</ConfigKey>
+              <Transform><IsEqual>0</IsEqual></Transform>
+              <BindProperty>visible</BindProperty>
+            </Connection>
+          </Label>
+        </Children>
+      </WidgetGroup>
+
+      <!-- bpm + sync tag -->
+      <WidgetGroup>
+        <ObjectName>Transparent</ObjectName>
+        <Layout>vertical</Layout>
+        <Size>110f,0me</Size>
+        <Children>
+          <NumberBpm>
+            <ObjectName>CardBpm</ObjectName>
+            <Group>[Channel<Variable name="channel"/>]</Group>
+            <NumberOfDigits>1</NumberOfDigits>
+            <SizePolicy>me,me</SizePolicy>
+            <Alignment>right</Alignment>
+            <Connection>
+              <ConfigKey>[Channel<Variable name="channel"/>],bpm</ConfigKey>
+            </Connection>
+            <Connection>
+              <ConfigKey>[Channel<Variable name="channel"/>],track_loaded</ConfigKey>
+              <BindProperty>visible</BindProperty>
+            </Connection>
+          </NumberBpm>
+          <Label>
+            <ObjectName>CardBpm</ObjectName>
+            <Text>xxx</Text>
+            <SizePolicy>me,me</SizePolicy>
+            <Alignment>right</Alignment>
+            <Connection>
+              <ConfigKey>[Channel<Variable name="channel"/>],track_loaded</ConfigKey>
+              <Transform><Not/></Transform>
+              <BindProperty>visible</BindProperty>
+            </Connection>
+          </Label>
+          <Label>
+            <ObjectName>TagLeader</ObjectName>
+            <Size>72f,22f</Size>
+            <Text>LEADER</Text>
+            <Connection>
+              <ConfigKey>[Channel<Variable name="channel"/>],sync_leader</ConfigKey>
+              <BindProperty>visible</BindProperty>
+            </Connection>
+          </Label>
+          <Label>
+            <ObjectName>TagFollower</ObjectName>
+            <Size>72f,22f</Size>
+            <Text>SYNC</Text>
+            <Connection>
+              <ConfigKey>[Channel<Variable name="channel"/>],sync_mode</ConfigKey>
+              <Transform><IsEqual>1</IsEqual></Transform>
+              <BindProperty>visible</BindProperty>
+            </Connection>
+          </Label>
+        </Children>
+      </WidgetGroup>
+
+      <!-- key + tempo -->
+      <WidgetGroup>
+        <ObjectName>Transparent</ObjectName>
+        <Layout>vertical</Layout>
+        <Size>120f,0me</Size>
+        <Children>
+          <Key>
+            <ObjectName>CardKey</ObjectName>
+            <Group>[Channel<Variable name="channel"/>]</Group>
+            <DisplayCents>false</DisplayCents>
+            <SizePolicy>me,me</SizePolicy>
+            <Alignment>right</Alignment>
+            <Connection>
+              <ConfigKey>[Channel<Variable name="channel"/>],visual_key</ConfigKey>
+            </Connection>
+            <Connection>
+              <ConfigKey>[Channel<Variable name="channel"/>],track_loaded</ConfigKey>
+              <BindProperty>visible</BindProperty>
+            </Connection>
+          </Key>
+          <Label>
+            <ObjectName>CardKey</ObjectName>
+            <Text>xx</Text>
+            <SizePolicy>me,me</SizePolicy>
+            <Alignment>right</Alignment>
+            <Connection>
+              <ConfigKey>[Channel<Variable name="channel"/>],track_loaded</ConfigKey>
+              <Transform><Not/></Transform>
+              <BindProperty>visible</BindProperty>
+            </Connection>
+          </Label>
+          <NumberRate>
+            <ObjectName>CardRate</ObjectName>
+            <Channel><Variable name="channel"/></Channel>
+            <NumberOfDigits>2</NumberOfDigits>
+            <SizePolicy>me,min</SizePolicy>
+            <Alignment>right</Alignment>
+          </NumberRate>
+        </Children>
+      </WidgetGroup>
+
+    </Children>
+  </TrackWidgetGroup>
+</Template>

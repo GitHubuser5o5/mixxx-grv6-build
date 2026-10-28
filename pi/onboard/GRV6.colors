@@ -1,0 +1,49 @@
+<?xml version="1.0"?>
+<!-- Onboard colour scheme "GRV6": same palette as the GRV6 Mixxx skin.
+     ground #050506, key #0d0e11, edge #1b1d22, text #e9e9ed, accent #d2670f -->
+<color_scheme name="GRV6" format="2.1">
+    <window type="key-popup">
+        <color element="border" rgb="#d2670f" opacity="1.0"/>
+    </window>
+
+    <icon><color element="background" rgb="#050506" opacity="1.0"/></icon>
+    <layer> <color element="background" rgb="#050506" opacity="1.0"/> </layer>
+    <layer> <color element="background" rgb="#050506" opacity="1.0"/> </layer>
+    <layer> <color element="background" rgb="#050506" opacity="1.0"/> </layer>
+
+    <!-- all keys -->
+    <key_group>
+        <color element="fill"   rgb="#0d0e11"/>
+        <color element="stroke" rgb="#1b1d22"/>
+        <color element="label"  rgb="#e9e9ed"/>
+
+        <color element="fill"   rgb="#d2670f" pressed="true"/>
+        <color element="stroke" rgb="#d2670f" pressed="true"/>
+        <color element="label"  rgb="#0a0a0b" pressed="true"/>
+
+        <color element="fill"   rgb="#d2670f" pressed="true" active="true"/>
+        <color element="stroke" rgb="#d2670f" pressed="true" active="true"/>
+
+        <color element="fill"   rgb="#d2670f" pressed="true" locked="true"/>
+        <color element="stroke" rgb="#d2670f" pressed="true" locked="true"/>
+
+        <!-- Shift / Caps while active -->
+        <color element="fill"   rgb="#7a3c09" active="true"/>
+        <color element="stroke" rgb="#d2670f" active="true"/>
+        <color element="fill"   rgb="#7a3c09" locked="true"/>
+        <color element="stroke" rgb="#d2670f" locked="true"/>
+
+        <!-- keys that are not letters: a little lighter, orange text -->
+        <key_group>
+            <color element="fill"   rgb="#15161a"/>
+            <color element="stroke" rgb="#1b1d22"/>
+            <color element="label"  rgb="#d2670f"/>
+
+            <color element="fill"   rgb="#d2670f" pressed="true"/>
+            <color element="stroke" rgb="#d2670f" pressed="true"/>
+            <color element="label"  rgb="#0a0a0b" pressed="true"/>
+
+            LFSH, RTSH, CAPS, BKSP, RTRN, TAB, ESC, layer, hide, move, settings
+        </key_group>
+    </key_group>
+</color_scheme>

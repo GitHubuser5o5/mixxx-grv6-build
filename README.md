@@ -1,54 +1,163 @@
-# Mixxx "stable 2" and "stable 3" builds
+<div align="center">
 
-Stable 1 = Debian mixxx 2.5.0+dfsg-3, unpatched.
-Stable 2 = the same source plus the patches in `patches/series` (order matters). Built by `.github/workflows/build.yml`, versions `2.5.0+dfsg-3+grv6.rN.1`. Known good, in use, frozen: do not add patches to `patches/series`.
-Stable 3 = stable 2 plus the Settings-tab patches (#32 and up), listed in `patches/series-stable3` (the same 31 lines, then the new ones). Built by `.github/workflows/build-stable3.yml`, versions `2.5.0+dfsg-3+grv6.s3rN.1`; the `s3` makes it sort above every stable 2 version, and the two workflows count their run numbers separately. Either can be installed over the other with `apt install --allow-downgrades`.
+# GRV6
 
-Stable 2 patches:
+**A standalone DJ system: Pioneer DDJ-GRV6 + Raspberry Pi 4 + touchscreen, running a patched Mixxx 2.5.**
 
-1. pdb-corruption-hardening: no crash on damaged Rekordbox export databases, no race when a device is opened
-2. xdj-behavior: waveform colours no longer react to the EQ, fixed waveform height, loop from cue, different Filter curve
-3. xdj-hardware: red downbeat bars on the beatgrid, controller reconnect watchdog (the DDJ-400 script change does not touch your GRV6 mapping)
-4. rekordbox-import-fixes: readable cue comments, playlists no longer missing most tracks
-5. headphone-gain-ceiling: headphone gain limit +14 dB -> +30 dB
-6. rekordbox-playlist-order: playlist track order kept
-7. rekordbox-unicode-paths: accented file names on Rekordbox USB sticks (trimmed: only the Rekordbox part)
-8. rekordbox-path-fallback: file-not-found fallback for FAT sticks mounted without UTF-8
-9. bpm-readout: steady, one-decimal BPM from the deck's exact tempo (touches engine BPM code)
-10. perf-render-repaint-waveform-only: the three waveform-marker files beatgrid-ticks needs, trimmed out of perf-render-repaint.patch (the rest of that patch touches library-view files that depend on patches not in this build)
-11. beatgrid-ticks: downbeat markers become thin red bars and every beat becomes a short tick at the top/bottom edge, instead of xdj-hardware's large red triangles and full-height white lines
-12. effect-ring-out: Echo and Reverb ring out naturally when their effect unit is disabled, instead of being cut off after one audio callback (EffectManifest gains tailTimeMillis, default 0 - unaffected: every other effect and every other effect rack, including the quick-effect racks). The tail is fed by a separate silent buffer that only starves the effect itself of new input - the channel's own dry volume is untouched, so switching FX focus to a different channel, or turning the effect off, no longer makes the channel's volume disappear.
-13. load-failed-banner: a failed track load (e.g. a pulled USB) sets [Library],load_error instead of showing a modal dialog with no way to dismiss it on a kiosk with no keyboard/mouse; the skin shows it as a banner, cleared by the controller's BACK button (channel 6, note 0x65 - see GRV6/SKIN-NOTES.md)
-14. error-dialog-banner: the same fix as #13, but for ErrorDialogHandler - the one shared route almost every OTHER Mixxx error goes through (database, library import/export, broadcasting, recording, controller-script exceptions, ...). Sets [Library],app_error instead of building any dialog; same banner, same BACK button clears it.
-15. sound-device-startup-retry: if the configured sound devices fail to open at startup (plausible on a Pi if a USB interface has not finished enumerating yet), retry a few times instead of showing a dialog nothing can dismiss; if it still fails, exit(0) so the kiosk's restart loop (~/.xinitrc) gets another try. Startup only - a device lost mid-session is a different, untouched code path.
-16. rekordbox-loop-hotcues: a Rekordbox hot cue that is actually a saved loop (CUE_ENTRY_TYPE_LOOP) now imports into Mixxx as a real Loop cue with its correct start and end, instead of losing its length and becoming a plain point cue.
-17. key-display-sharps: the two enharmonic key names that used to show both spellings (F♯/G♭ and D♯m/E♭m) now show sharps only (F♯, D♯m), matching every other key in the traditional-notation table which already picks one spelling. Only these two string-table entries change; nothing else about key detection or display.
-18. rekordbox-loading-spinner: [Library],grv6_rekordbox_busy is set while RekordboxFeature scans a USB device or parses a device's playlists, cleared when each finishes; the skin shows it as a banner across the top of Browse. Both are the existing QtConcurrent worker phases RekordboxFeature already had - no new threading.
-19. browse-zoom: Library gains a live [Library],grv6_visible_rows control (3-20, default 8, 0 = off/manual sizing) - row height and font are derived from the viewport so exactly that many rows fit. Ported from Pioneered's library-ui.patch, minus its Preferences-dialog spinner (replaced with the live control so the GRV6 mapping's shift+browse-knob can drive it directly).
-20. rekordbox-force-sort: Rekordbox track lists and playlists always open sorted by # (playlist position) ascending, regardless of any saved header sort state.
-21. rekordbox-fixed-columns: Rekordbox views show a fixed column set (#, Title, Artist, Key, Duration) with proportional widths that fill the viewport. Every other library source (Mixxx library, crates, playlists, other USB formats) is unaffected.
-22. key-traffic-light: the Key cell in any library table is highlighted green when Camelot-compatible with the currently playing "master" deck's key (most recently started of the playing decks; nothing highlighted while nothing is playing). Side effect: the Key column everywhere now always shows a fixed notation (see #23), regardless of the Preferences key-notation setting.
-23. rekordbox-key-notation-and-bpm-sort: the Key column everywhere now always shows Camelot-wheel notation (Mixxx calls it "Lancelot" internally, e.g. "8A") instead of whatever #22 first forced (musical note names). Also: Rekordbox playlists now default-sort by BPM ascending instead of # (overrides #20's default for Rekordbox specifically; the force-sort mechanism itself is unchanged).
-24. rekordbox-color-column: the Rekordbox track color tag (already parsed into the library's Color column, just never shown) is added to the fixed column layout from #21, as a narrow swatch at the left edge - reuses Mixxx's own color cell rendering, no new drawing code.
-25. rekordbox-bpm-column: adds a BPM column (between Artist and Key) to the fixed layout from #21, so BPM - already the default sort from #23 - can also be clicked to re-sort manually, the same as every other visible column.
-26. rekordbox-duration-column-fix: the Duration column (rightmost, meant to stretch to the right edge via setStretchLastSection) was reported pushed off-screen. Root cause: setStretchLastSection is called in loadTrackModel() before applyFixedColumnWidths()'s moveSection() reordering, so Qt could still be tracking a different column as "last" for stretch purposes when it was set. Duration's width is now also set explicitly (viewport width minus every other column's width, floored at its own content minimum) instead of relying solely on the stretch mechanism; setStretchLastSection is kept too, for live window-resize tracking.
-27. rekordbox-rating-column: adds a star Rating column (between Key and Duration) to the fixed layout from #21. The data was already being imported from Rekordbox (track->rating(), bound into the temp table's rating column since the very first Rekordbox patches) and the column was visible before #21 restricted the layout - reuses Mixxx's own StarDelegate rendering, no new drawing code.
-28. rekordbox-force-show-columns: BPM was reported missing from the Rekordbox table despite #25 adding it. Root cause: loadTrackModel() only ever calls hideSection() for columns that should be hidden, never showSection() for columns that should be visible - so a column hidden in an *earlier* session (BPM was internal/hidden under #21-24, before #25 exempted it) stays hidden forever once Qt persists that header state, regardless of what isColumnInternal() says afterwards. Fixed columns (Rekordbox, fixedColumnLayout() == true) now get every non-internal column force-shown on every load, overriding any stale persisted state; every other model (the normal Mixxx library, crates, playlists) is untouched and keeps respecting the user's own manual column choices.
-29. deck-key-camelot: the deck panels' own Key widgets (WKey - Main tab, browse cards, deck strips, info box) were still showing traditional key names after #22/#23 forced Camelot in the library table. Different code path: WKey calls KeyUtils::keyToString(key) with no notation argument, defaulting to KeyNotation::Custom, which reads a static cache (KeyUtils::s_notation) only ever populated by the Key Preferences page (DlgPrefKey) - it does not react to [Library],key_notation being set live, so a skin manifest attribute cannot fix this (tried, reverted - see GRV6/SKIN-NOTES.md). WKey now calls keyToString(key, KeyUtils::KeyNotation::Lancelot) directly, bypassing the cache entirely, the same way the library table's Key column already does.
-30. no-bpm-lock-checkbox: the BPM column's "lock against re-analysis" checkbox (BPMDelegate) was reported as an unstyled, oversized box. A QSS attempt to shrink/hide its indicator did not visibly take effect - Qt's item-view check indicator does not necessarily respect ::indicator width/height the way a real QCheckBox widget would, and Mixxx's own documented styling for this exact widget only ever covers swapping its icon image, never sizing it. BaseTrackTableModel::delegateForColumn() no longer assigns BPMDelegate at all; the BPM column falls through to the default delegate (plain numeric text) everywhere - every library table (normal library, crates, playlists, Rekordbox), since the method is `final` and cannot be overridden per-model. Not used on this rig either way (BPM values come from Rekordbox's own analysis, not Mixxx's).
+A full-screen touch skin in the style of a Pioneer XDJ display, a custom controller mapping,
+and a Mixxx build with better Rekordbox USB support and a kiosk-friendly system menu.
 
-31. no-bpm-check-state: #30 alone did not remove the BPM box (confirmed on an installed r9.1). Root cause: BaseTrackTableModel::roleValue() answers Qt::CheckStateRole for the BPM column from the bpm_lock field, and ANY item delegate (including the default one #30 falls back to) draws a checkbox whenever the model supplies check-state data. Rekordbox's temp table has no bpm_lock column, so every cell answered "undecidable" (Qt::PartiallyChecked), drawn as a solid box over the BPM number. The BPM case is dropped from the CheckStateRole switch, so BPM returns no check state at all. Applies to every library table, same scope as #30. The write side (setData toggling the lock) is untouched but unreachable once no indicator is drawn.
+[![Build stable 3](https://github.com/GitHubuser5o5/mixxx-grv6-build/actions/workflows/build-stable3.yml/badge.svg)](https://github.com/GitHubuser5o5/mixxx-grv6-build/actions/workflows/build-stable3.yml)
+[![Latest release](https://img.shields.io/github/v/release/GitHubuser5o5/mixxx-grv6-build?label=release)](https://github.com/GitHubuser5o5/mixxx-grv6-build/releases/latest)
+[![Mixxx 2.5.0](https://img.shields.io/badge/Mixxx-2.5.0-ff6600)](https://mixxx.org)
+[![Raspberry Pi 4](https://img.shields.io/badge/Raspberry%20Pi%204-arm64-c51a4a?logo=raspberrypi&logoColor=white)](#hardware)
+[![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 
-Stable 3 leaves out #18 rekordbox-loading-spinner (the banner never showed in testing; removed from the skin too) and adds (only in `patches/series-stable3`):
+<img src="docs/screenshots/main.png" alt="GRV6 skin, Main tab" width="900">
 
-32. key-style-setting: how keys are written on screen is now a live setting instead of the fixed Camelot of #23/#29. Two saved values, `[Library],grv6_key_traditional` (0 = Camelot, 1 = traditional names) and `[Library],grv6_key_flats` (0 = sharps, 1 = flats, traditional only), created by `Library` before the skin loads, and four push buttons that change them: `grv6_key_set_camelot`, `grv6_key_set_traditional`, `grv6_key_set_sharps`, `grv6_key_set_flats` (a skin button can only write 1, and on a plain value that can never switch back, which is what the first version of this patch got wrong - it made the values plain and the skin toggled them). `KeyUtils::keyToGrvString()` turns a key into text from two full 24-name tables (every black key spelled as a sharp, or every one as a flat - the stock traditional table mixes both) or the Camelot name. Used by the deck panels' Key widget (`WKey`, which also redraws when either value changes) and by the library Key column, which repaints on its own the next time it is shown. The Key preferences page, sorting, the traffic-light compatibility check and the search are untouched (they work from the raw key value).
-33. main-eq-graphic-default: `EffectsManager::setup()` loads the 8-band Graphic EQ into the main-mix EQ slot (`[OutputEffectRack_[Master]_Effect1]`) when effects.xml left it empty, the same way `loadDefaultEqsAndQuickEffects()` fills the per-deck EQ slots. Its knobs are `parameter1` (bass shelf), `parameter2`-`parameter7` (six mid bands) and `parameter8` (treble shelf), -12 to +12 dB, so the skin can put three touch knobs on them. An EQ that effects.xml already restored is left alone, so knob positions survive restarts.
-34. browse-zoom-step: `[Library],grv6_visible_rows_up` / `grv6_visible_rows_down` push buttons (+1 / -1 row, clamped to 3-20, the same range as the controller knob) so a skin's stepper can change the browse text size, and every change of `grv6_visible_rows` (knob or stepper) is now written to the `VisibleRows` config value, which the constructor already read back, so the zoom survives a restart (it used to reset to 8).
-35. rekordbox-viewport-resize: the last digits of the Duration column were clipped, by 6 pixels. Cause: `applyFixedColumnWidths()` asked for a 14 px Color column, but `WTrackTableViewHeader` sets a minimum section size of 20, so the columns added up to 6 px more than the function's own sum and Duration, the last column (sized as viewport minus the others), ended 6 px past the viewport. Fixed twice over: the requested Color width is at least the header's minimum, and after all widths are set the columns are fitted to the viewport using the header's real length (Duration is trimmed or grown, and Title gives up the rest if Duration is already as narrow as its text allows). Also `WTrackTableView::viewportEvent()` re-runs the whole thing on every viewport resize, because the vertical scroll bar appearing or disappearing shrinks or grows the viewport without the view itself being resized. (Tried and dropped before finding the cause: a stylesheet `padding-right`, which only worked on the selected row, and reserving the scroll bar's width in advance.) The function logs one line (`GRV6 fixed columns: viewport ... header ... duration ...`) to mixxx.log each time, in case the widths ever need checking again.
-36. library-fixed-columns: the fixed appliance column layout of #21-#28 (Color, #, Title, Artist, BPM, Key, Rating, Duration, widths filled to the viewport) now also applies to the Mixxx library (Tracks), playlists, crates, history and Auto DJ, not only Rekordbox. `LibraryTableModel` and `TrackSetTableModel` return true from `fixedColumnLayout()`. The view now shows exactly the fixed set and hides every other column (Preview, Album, Year, Genre, ...) on every load, instead of relying on each model's `isColumnInternal()`, and ignores `isColumnHiddenByDefault()` for these models. A column the model does not have (Tracks and crates have no # column) is simply left out and the others share the width. Hidden/missing tracks, Browse and the other external libraries keep Mixxx's own layout. If the columns do not add up to the viewport, the log lists every shown section with its width (`GRV6 fixed columns: shown section ...`).
-37. key-selected-traffic-light: the green traffic-light Key cell (#22) disappeared on the selected row, because the stylesheet paints a selected row with the selection colour over every cell. The Key column now has its own small delegate (`GrvKeyDelegate`, defined in basetracktablemodel.cpp, no new files) that draws a cell with a background of its own as if it were not selected, so the traffic light shows on the highlighted row too.
-38. grv6-settings-system: the backend of the skin's Settings tab, in a new class `Grv6System` (src/grv6/, added to CMakeLists.txt) that `MixxxMainWindow::initialize()` creates before the skin loads. It owns the `[GRV6]` controls: saved settings `startup_quantize`, `startup_tempo` (0-3 = +-6/10/16/50 %), `startup_time` (TIME/REMAIN), `xf_curve` (smooth = constant power / sharp cut = additive, steepest), `load_block` (also read by `WTrackTableView::loadSelectedTrackToGroup`, overriding the Preferences setting), `sleep` (off/5/10/15/30/60 min); actions `sleep_now`, `power_off` (hold 5 s: stops all decks, starts `sleep 15; sudo -n /usr/sbin/poweroff || systemctl poweroff` and closes Mixxx normally so settings are saved); `theme`/`accent` (written as the skin colour scheme name in [Config],Scheme, then the skin is reloaded); USB sticks `usbN_state/size_gb/free_gb/used/deck/fail/eject` (N = 1-4) from `QStorageInfo` (sticks mounted under /media or /run/media), eject = unload decks that hold a track from the stick (refused while one plays), then `udisksctl unmount` (fallback `sudo -n umount`) and `udisksctl power-off`. Startup defaults are applied after the first skin load; the time readout after every skin load. Sleep uses the X server's own screen saver (`ScreenSaverHelper::grv6SetSleepTimeout` / `grv6SleepNow`, new, plain Xlib calls next to Mixxx's existing `XResetScreenSaver` use): the screen goes black, touch and controller input wake it, and a timer resets it every 20 s while a deck plays.
-39. grv6-settings-fixes: after the first test of #38. New saved `[GRV6],startup_keylock` (master tempo at startup, applied with the other startup defaults). Sleep steps are now OFF/10/30/60/90 minutes. SLEEP NOW acts 0.8 s after the button is released (lifting the finger is touch input and woke the screen straight away). POWER OFF now covers the window with GRV6/images/shutdown.png, sets it as the X desktop background with `feh` (if installed) so it stays visible after Mixxx's window closes, writes /tmp/grv6-poweroff (~/.xinitrc does not restart Mixxx while it exists; Mixxx removes it when it starts) and powers off as soon as Mixxx has exited (at most 30 s).
+</div>
 
-Checked here: all thirty-one apply cleanly, in this exact order, on the unpatched Debian source (fresh extraction, tested end to end); and the thirty-eight of `series-stable3` (39 minus #18) apply cleanly on a fresh extraction too. Not checked here: compiling (that is what the GitHub build does) or hearing/using any of it (that is what the Pi does).
-Left out on purpose: everything that only serves the Pioneered touch skin, browse-bpm-column, jog-nudge (DDJ-400), browse-encoder-zoom (superseded by #19, done live instead of via Preferences).
+---
+
+## Contents
+
+- [Features](#features)
+- [Screenshots](#screenshots)
+- [Hardware](#hardware)
+- [Installation](#installation)
+- [Updating](#updating)
+- [Repository layout](#repository-layout)
+- [Building Mixxx](#building-mixxx)
+- [Working on the skin](#working-on-the-skin)
+- [Known issues](#known-issues)
+- [Roadmap](#roadmap)
+- [Credits](#credits)
+- [License](#license)
+
+## Features
+
+### Skin (`GRV6/`)
+- **Four tabs:** Main, Browse, Sampler and Settings, all made for touch on a 1920x1080 screen with no mouse or keyboard.
+- **Four decks, two at a time:** the controller's DECK buttons choose deck 1 or 3 on the left and 2 or 4 on the right. The other deck of each side stays visible as a small strip.
+- **XDJ-style decks:** coloured scrolling waveforms with beat ticks and red downbeats, overviews, big time, BPM (one decimal) and key readouts, tempo range, master tempo, sync leader/follower, loop size, ON AIR.
+- **Browse:** big rows (3-20 on screen), a fixed column layout, a key "traffic light" that turns green when a track mixes with the playing deck, track info and preview, LOAD 1-4.
+- **Settings:** main EQ, crossfader assign and curve, hot cue mode (normal or gate), key notation, browse text size, recording, startup defaults, theme, USB sticks with safe eject, sleep timer and power off.
+- **Themes:** dark and light, five accent colours.
+
+### Controller mapping (`controller/`)
+- A Pioneer DDJ-GRV6 mapping for four decks, with deck switching that follows the skin.
+- Browse knob scrolls the library, zooms the waveforms on Main, and with SHIFT changes the row size.
+- Hot cues, loops, FX and CFX, lights and VU meters; startup defaults come from the skin's Settings.
+
+### Mixxx build (`patches/`)
+39 patches on top of Debian's `mixxx 2.5.0+dfsg-3`. The most important:
+- **Rekordbox USB:** no crash on damaged exports, complete playlists in the right order, accented file names, saved loops as loop cues, colour/BPM/rating columns.
+- **Kiosk-friendly:** errors show as a banner the controller can dismiss instead of a dialog nobody can close; the sound card is retried at startup.
+- **XDJ feel:** steady BPM readout, waveforms that don't react to the EQ, Echo and Reverb that ring out.
+- **System backend for the Settings tab:** startup defaults, crossfader curve, sleep, power off with a shutdown screen, USB stick eject, theme switching.
+
+Every patch is listed in [patches/README.md](patches/README.md).
+
+## Screenshots
+
+| Main | Browse |
+|:---:|:---:|
+| <img src="docs/screenshots/main.png" alt="Main tab" width="440"> | <img src="docs/screenshots/browse.png" alt="Browse tab" width="440"> |
+| **Settings** | **Light theme** |
+| <img src="docs/screenshots/settings.png" alt="Settings tab" width="440"> | <img src="docs/screenshots/light.png" alt="Light theme" width="440"> |
+
+## Hardware
+
+| Part | Notes |
+|---|---|
+| Raspberry Pi 4 | Raspberry Pi OS Lite (64-bit, Debian trixie) |
+| Pioneer DDJ-GRV6 | connected over USB |
+| Touchscreen | 1920x1080 |
+| USB sticks | Rekordbox exports or plain music folders; FAT32, exFAT, NTFS |
+
+## Installation
+
+1. Flash **Raspberry Pi OS Lite (64-bit)** and log in on the Pi.
+2. Get this repository:
+   ```bash
+   sudo apt install -y git
+   git clone https://github.com/GitHubuser5o5/mixxx-grv6-build.git
+   cd mixxx-grv6-build
+   ```
+3. Download `mixxx_*.deb` and `mixxx-data_*.deb` from the [latest release](https://github.com/GitHubuser5o5/mixxx-grv6-build/releases/latest) into that folder.
+4. Run the setup script. It installs X and the helper tools, the Mixxx build, the skin and the mapping, starts Mixxx full screen at boot, and allows POWER OFF and USB eject without a password:
+   ```bash
+   bash pi/setup.sh
+   ```
+5. Reboot. In Mixxx, choose **Preferences > Interface > Skin: GRV6** and **Preferences > Controllers > DDJ-GRV6 Custom** (enable it).
+
+> [!NOTE]
+> The skin and mapping also work on a stock Mixxx 2.5, but the Settings tab, the error banners and most of the Browse features need the patched build.
+
+## Updating
+
+```bash
+cd mixxx-grv6-build
+git pull
+bash pi/setup.sh
+```
+
+Skin changes take effect after a Mixxx restart. To install a new build only: `sudo apt install --allow-downgrades ./mixxx_*.deb ./mixxx-data_*.deb`.
+
+## Repository layout
+
+```
+GRV6/            the Mixxx skin (copy to ~/.mixxx/skins/)
+controller/      DDJ-GRV6 mapping and script (copy to ~/.mixxx/controllers/)
+patches/         Mixxx patches and the two series files
+pi/              Raspberry Pi setup: setup.sh, xinitrc, Onboard keyboard theme
+tools/           generators for the skin's XML, themes and images
+docs/            developer notes and a screen-by-screen reference
+.github/         build workflows
+```
+
+## Building Mixxx
+
+The build runs on GitHub Actions (arm64, Debian trixie container): **Actions > Build Mixxx 2.5.0 stable 3 > Run workflow**. It fetches the Debian source package, applies [`patches/series-stable3`](patches/series-stable3) and publishes the two .deb files as a release named `stable3-rN`.
+
+| Build | Series | Version | State |
+|---|---|---|---|
+| Stable 3 | [`series-stable3`](patches/series-stable3) | `2.5.0+dfsg-3+grv6.s3rN.1` | current |
+| Stable 2 | [`series`](patches/series) | `2.5.0+dfsg-3+grv6.rN.1` | frozen fallback |
+
+How to add a patch is described in [patches/README.md](patches/README.md#adding-a-patch).
+
+## Working on the skin
+
+Most of the skin is generated. Edit the generators, not the XML:
+
+```bash
+python tools/build_skin.py    # skin.xml, main.xml, browse.xml, settings.xml, ..., themes/*.qss
+python tools/make_images.py   # images/ (needs Pillow)
+```
+
+`GRV6/style.qss` and the remaining templates are edited by hand; `tools/themes.py` holds the colour themes.
+The controls shared by the skin, the mapping and the patched build are documented in [docs/skin-notes.md](docs/skin-notes.md); everything on screen is listed in [docs/skin-inventory.md](docs/skin-inventory.md).
+
+## Known issues
+
+- Sorting a Rekordbox playlist by **Key** can empty the list (a stock Mixxx bug). Sort by another column to get it back.
+- Retriggering a loop hot cue can occasionally play a sliver past the loop end.
+
+## Roadmap
+
+- [ ] Sampler tab design
+- [ ] RMX EMU tab (Groove Circuit)
+- [ ] Optional slow stop on PLAY (off by default)
+
+## Credits
+
+- [Mixxx](https://mixxx.org), the open-source DJ software this is built on, and Debian's `mixxx` package.
+- [joergbeyer/dj-controller](https://github.com/joergbeyer/dj-controller): the original DDJ-GRV6 mapping the controller files are based on.
+- [ntamas94/pioneered-by-ntamas](https://github.com/ntamas94/pioneered-by-ntamas): several patches (library zoom, Rekordbox fixes) are ported from it.
+
+This project is not affiliated with or endorsed by Pioneer DJ, AlphaTheta or the Mixxx project. Product names are used only to describe compatibility.
+
+## License
+
+[GPL-3.0](LICENSE). Mixxx is GPL-2.0-or-later and the mapping and ported patches are GPL-3.0, so the project as a whole is distributed under GPL-3.0.

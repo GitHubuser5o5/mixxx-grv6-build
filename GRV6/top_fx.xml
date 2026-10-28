@@ -1,0 +1,66 @@
+<!DOCTYPE template>
+<!--
+  CFX and FX STRIP readout for the top bar. Names come from the effect chain presets that exist on the Pi.
+  CFX = quick effect chain of channel 1 (the controller switches all channels together).
+  FX STRIP = effect unit 1 (Beat FX).
+-->
+<Template>
+  <Label><ObjectName>TopCaption</ObjectName><Text>CFX</Text></Label>
+  <EffectChainName>
+    <ObjectName>TopFxName</ObjectName>
+    <TooltipId>EffectUnit_chain_selector</TooltipId>
+    <EffectUnitGroup>[QuickEffectRack1_[Channel1]]</EffectUnitGroup>
+    <SizePolicy>min,me</SizePolicy>
+  </EffectChainName>
+  <Label>
+    <ObjectName>TagOn</ObjectName>
+    <Size>48f,24f</Size>
+    <Text>ON</Text>
+    <Connection>
+      <ConfigKey>[QuickEffectRack1_[Channel1]],enabled</ConfigKey>
+      <BindProperty>visible</BindProperty>
+    </Connection>
+  </Label>
+  <Label>
+    <ObjectName>TagOff</ObjectName>
+    <Size>48f,24f</Size>
+    <Text>OFF</Text>
+    <Connection>
+      <ConfigKey>[QuickEffectRack1_[Channel1]],enabled</ConfigKey>
+      <Transform><Not/></Transform>
+      <BindProperty>visible</BindProperty>
+    </Connection>
+  </Label>
+
+  <Label><ObjectName>TopDivider</ObjectName><Size>1f,26f</Size></Label>
+
+  <Label><ObjectName>TopCaption</ObjectName><Text>FX STRIP</Text></Label>
+  <EffectChainName>
+    <ObjectName>TopFxName</ObjectName>
+    <TooltipId>EffectUnit_chain_selector</TooltipId>
+    <EffectUnit>1</EffectUnit>
+    <SizePolicy>min,me</SizePolicy>
+  </EffectChainName>
+  <Label>
+    <ObjectName>TagOn</ObjectName>
+    <Size>48f,24f</Size>
+    <Text>ON</Text>
+    <Connection>
+      <ConfigKey>[EffectRack1_EffectUnit1],enabled</ConfigKey>
+      <BindProperty>visible</BindProperty>
+    </Connection>
+  </Label>
+  <Label>
+    <ObjectName>TagOff</ObjectName>
+    <Size>48f,24f</Size>
+    <Text>OFF</Text>
+    <Connection>
+      <ConfigKey>[EffectRack1_EffectUnit1],enabled</ConfigKey>
+      <Transform><Not/></Transform>
+      <BindProperty>visible</BindProperty>
+    </Connection>
+  </Label>
+
+  <Label><ObjectName>Spacer</ObjectName><SizePolicy>me,min</SizePolicy></Label>
+  <Label><ObjectName>TopHint</ObjectName><Text>all channels</Text></Label>
+</Template>

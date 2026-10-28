@@ -1,0 +1,1382 @@
+/* GRV6 skin - colours and type from the design mockup ("Nocturne", turn 2: near-black ground, orange accent).
+
+   ground  #050506   panel #0d0e11   edge #1b1d22
+   text    #e9e9ed   muted #71747b / #63666d / #5a5d64 / #4a4d54 / #3c3f45
+   accent  #d2670f   accent-dark #7a3c09   accent-deep #1d1006   play #35c464
+
+   Rules are keyed on <ObjectName>. Qt stylesheets can't do letter-spacing or tabular figures,
+   so those two details of the mockup are not reproduced. */
+
+* {
+  font-family: "Inter", "DejaVu Sans", sans-serif;
+}
+
+#Mixxx,
+#SkinRoot {
+  background-color: #050506;
+}
+
+#SkinRoot {
+  qproperty-layoutSpacing: 6;
+  qproperty-layoutContentsMargins: '6 6 6 6';
+}
+
+#Transparent,
+#MainPage,
+#BrowsePage,
+#SamplerPage {
+  background-color: transparent;
+}
+
+#MainPage,
+#BrowsePage {
+  qproperty-layoutSpacing: 6;
+}
+
+#MiddleRow,
+#BottomRow,
+#CardRow,
+#LibraryRow,
+#SamplerPage {
+  background-color: transparent;
+  qproperty-layoutSpacing: 4;
+}
+
+#BottomRow {
+  qproperty-layoutSpacing: 6;
+}
+
+#ColumnRow,
+#WaveArea {
+  background-color: transparent;
+  qproperty-layoutSpacing: 4;
+}
+
+WLabel {
+  color: #e9e9ed;
+  font-size: 15px;
+}
+
+QToolTip {
+  background-color: #0d0e11;
+  color: #e9e9ed;
+  border: 1px solid #1b1d22;
+}
+
+/* ------------------------------------------------------------------ top bar */
+
+#TopBar {
+  background-color: transparent;
+  qproperty-layoutSpacing: 6;
+}
+
+#TabButton {
+  background-color: #0d0e11;
+  border: 1px solid #1b1d22;
+  border-radius: 5px;
+  color: #6e7178;
+  font-size: 17px;
+  font-weight: 600;
+  margin-right: 3px;
+}
+
+#TabButton[value="1"] {
+  background-color: #d2670f;
+  border-color: #d2670f;
+  color: #0a0a0b;
+}
+
+#TopBlock {
+  background-color: #0d0e11;
+  border: 1px solid #1b1d22;
+  border-radius: 5px;
+  qproperty-layoutSpacing: 12;
+  qproperty-layoutContentsMargins: '0 14 0 14';
+}
+
+#TopCaption {
+  color: #63666d;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+#TopFxName {
+  color: #e9e9ed;
+  font-size: 24px;
+  font-weight: 500;
+}
+
+#TopHint {
+  color: #4a4d54;
+  font-size: 14px;
+}
+
+#TopDivider {
+  background-color: #1b1d22;
+}
+
+#TagOn {
+  background-color: #d2670f;
+  color: #0a0a0b;
+  border: 1px solid #d2670f;
+  border-radius: 3px;
+  font-size: 12px;
+  font-weight: 600;
+  qproperty-alignment: AlignCenter;
+}
+
+#TagOff {
+  color: #5a5d64;
+  border: 1px solid #1b1d22;
+  border-radius: 3px;
+  font-size: 12px;
+  font-weight: 600;
+  qproperty-alignment: AlignCenter;
+}
+
+#TopClock {
+  color: #e9e9ed;
+  font-size: 22px;
+  font-weight: 500;
+  qproperty-alignment: AlignCenter;
+}
+
+#TopSearch {
+  background-color: transparent;
+  color: #e9e9ed;
+  font-size: 19px;
+  border: none;
+}
+
+WSearchLineEdit {
+  background-color: transparent;
+  color: #e9e9ed;
+  font-size: 19px;
+  border: none;
+}
+
+/* ------------------------------------------------------------------ narrow column */
+
+#ColPanel {
+  background-color: #0d0e11;
+  border: 1px solid #1b1d22;
+  border-radius: 4px;
+  qproperty-layoutContentsMargins: '6 8 6 8';
+}
+
+#ColSection {
+  background-color: transparent;
+  qproperty-layoutSpacing: 6;
+  qproperty-layoutAlignment: AlignCenter;
+}
+
+#ColCaption {
+  color: #63666d;
+  font-size: 10px;
+  font-weight: 600;
+  qproperty-alignment: AlignCenter;
+}
+
+#ColCaptionPlay {
+  color: #4a4d54;
+  font-size: 10px;
+  font-weight: 600;
+  qproperty-alignment: AlignCenter;
+}
+
+#ColCaptionPlay[highlight="1"] {
+  color: #35c464;
+}
+
+#HRule {
+  background-color: #1b1d22;
+}
+
+#OnAirIcon {
+  image: url(skin:/images/onair_off.png);
+}
+
+#OnAirIcon[highlight="1"] {
+  image: url(skin:/images/onair_on.png);
+}
+
+/* Deck strip's smaller, icon-only version (no caption) - same images, same on/off logic. */
+#StripOnAirIcon {
+  image: url(skin:/images/onair_off.png);
+}
+
+#StripOnAirIcon[highlight="1"] {
+  image: url(skin:/images/onair_on.png);
+}
+
+#DeckBadgeBig {
+  background-color: #d2670f;
+  color: #0a0a0b;
+  border-radius: 7px;
+  font-size: 28px;
+  font-weight: 600;
+  qproperty-alignment: AlignCenter;
+}
+
+#DeckBadge {
+  background-color: #d2670f;
+  color: #0a0a0b;
+  border-radius: 3px;
+  font-size: 18px;
+  font-weight: 600;
+  qproperty-alignment: AlignCenter;
+}
+
+/* ------------------------------------------------------------------ waveforms */
+
+#WaveArea WLabel {
+  background-color: transparent;
+}
+
+/* ------------------------------------------------------------------ deck panel (bottom) */
+
+#DeckPanel {
+  background-color: transparent;
+  qproperty-layoutSpacing: 4;
+}
+
+#DeckCover {
+  border: 1px solid #1b1d22;
+  background-color: #0e0f12;
+}
+
+#DeckRight {
+  background-color: transparent;
+  qproperty-layoutSpacing: 4;
+}
+
+#DeckHeader {
+  background-color: #0d0e11;
+  border: 1px solid #1b1d22;
+  border-radius: 4px;
+  qproperty-layoutSpacing: 10;
+  qproperty-layoutContentsMargins: '6 10 6 10';
+}
+
+#DeckTitle {
+  color: #e9e9ed;
+  font-size: 23px;
+  font-weight: 500;
+}
+
+#DeckArtist {
+  color: #71747b;
+  font-size: 16px;
+  qproperty-alignment: 'AlignVCenter | AlignRight';
+}
+
+#DeckRight #Transparent {
+  qproperty-layoutSpacing: 4;
+}
+
+#Box {
+  background-color: #0d0e11;
+  border: 1px solid #1b1d22;
+  border-radius: 4px;
+  qproperty-layoutSpacing: 2;
+  qproperty-layoutContentsMargins: '8 10 8 10';
+}
+
+#BoxCaption {
+  color: #63666d;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+#BoxCaptionAccent {
+  color: #d2670f;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+#BigTime {
+  color: #e9e9ed;
+  font-size: 76px;
+  font-weight: 500;
+}
+
+#BoxFoot {
+  color: #4a4d54;
+  font-size: 14px;
+}
+
+#BigBpm {
+  color: #e9e9ed;
+  font-size: 54px;
+  font-weight: 500;
+}
+
+#TagLeader {
+  background-color: #d2670f;
+  color: #0a0a0b;
+  border: 1px solid #d2670f;
+  border-radius: 3px;
+  font-size: 12px;
+  font-weight: 600;
+  qproperty-alignment: AlignCenter;
+}
+
+#TagFollower {
+  color: #5a5d64;
+  border: 1px solid #1b1d22;
+  border-radius: 3px;
+  font-size: 12px;
+  font-weight: 600;
+  qproperty-alignment: AlignCenter;
+}
+
+#TempoValue {
+  color: #e9e9ed;
+  font-size: 30px;
+  font-weight: 500;
+}
+
+#TempoPercent {
+  color: #71747b;
+  font-size: 17px;
+}
+
+#TagRange {
+  border: 1px solid #7a3c09;
+  border-radius: 3px;
+  background-color: transparent;
+  qproperty-layoutContentsMargins: '0 7 0 7';
+}
+
+#TagRangeText {
+  color: #d2670f;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+#BigKey {
+  color: #e9e9ed;
+  font-size: 34px;
+  font-weight: 500;
+}
+
+#TagMt {
+  color: #5a5d64;
+  border: 1px solid #1b1d22;
+  border-radius: 3px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 0px 7px;
+  qproperty-alignment: AlignCenter;
+}
+
+#TagMt[highlight="1"] {
+  background-color: #d2670f;
+  border-color: #d2670f;
+  color: #0a0a0b;
+}
+
+/* transposed key: original key and shift, shown only while the key is shifted */
+#KeyShiftBox {
+  background-color: transparent;
+  qproperty-layoutSpacing: 0;
+}
+
+#KeyShiftCaption {
+  color: #63666d;
+  font-size: 9px;
+  font-weight: 600;
+}
+
+#KeyOrig {
+  color: #a9acb3;
+  font-size: 20px;
+  font-weight: 500;
+}
+
+#KeyShiftValue {
+  color: #d2670f;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+#DeckButton {
+  background-color: #0d0e11;
+  border: 1px solid #1b1d22;
+  border-radius: 4px;
+  color: #5a5d64;
+  font-size: 14px;
+  font-weight: 600;
+  margin-right: 3px;
+}
+
+#DeckButton[value="1"] {
+  background-color: #d2670f;
+  border-color: #d2670f;
+  color: #0a0a0b;
+}
+
+#LoopBox {
+  background-color: #0d0e11;
+  border: 1px solid #1b1d22;
+  border-radius: 4px;
+  qproperty-layoutSpacing: 8;
+  qproperty-layoutAlignment: AlignCenter;
+}
+
+#LoopCaption {
+  color: #3c3f45;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+#LoopCaption[highlight="1"] {
+  color: #a05408;
+}
+
+#LoopSize {
+  color: #4a4d54;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+#LoopSize[highlight="1"] {
+  color: #d2670f;
+}
+
+/* ------------------------------------------------------------------ strip under the deck panel */
+
+#DeckStrip {
+  background-color: #0b0c0e;
+  border-top: 1px solid #1b1d22;
+  qproperty-layoutSpacing: 8;
+}
+
+#StripCover {
+  background-color: #0e0f12;
+}
+
+#StripTitle {
+  color: #71747b;
+  font-size: 16px;
+}
+
+#StripValue {
+  color: #71747b;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+#StripTime {
+  color: #4a4d54;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+#StripSep {
+  color: #2f3237;
+  font-size: 15px;
+}
+
+/* ------------------------------------------------------------------ browse */
+
+#BrowseCard {
+  background-color: #0a0a0c;
+  border: 1px solid #17181c;
+  border-radius: 6px;
+  qproperty-layoutSpacing: 12;
+  qproperty-layoutContentsMargins: '0 12 0 0';
+}
+
+#CardCover {
+  background-color: #101115;
+}
+
+#CardTitle {
+  color: #e9e9ed;
+  font-size: 21px;
+  font-weight: 500;
+}
+
+#CardArtist {
+  color: #71747b;
+  font-size: 15px;
+}
+
+#CardTime {
+  color: #e9e9ed;
+  font-size: 36px;
+  font-weight: 500;
+  qproperty-alignment: 'AlignVCenter | AlignRight';
+}
+
+#CardCaption {
+  color: #d2670f;
+  font-size: 12px;
+  font-weight: 600;
+  qproperty-alignment: AlignRight;
+}
+
+#CardBpm {
+  color: #e9e9ed;
+  font-size: 28px;
+  font-weight: 500;
+  qproperty-alignment: 'AlignVCenter | AlignRight';
+}
+
+#CardKey {
+  color: #e9e9ed;
+  font-size: 26px;
+  font-weight: 500;
+  qproperty-alignment: 'AlignVCenter | AlignRight';
+}
+
+#CardRate {
+  color: #4a4d54;
+  font-size: 13px;
+  qproperty-alignment: AlignRight;
+}
+
+#InfoBox {
+  background-color: transparent;
+  qproperty-layoutSpacing: 4;
+  qproperty-layoutContentsMargins: '10 8 10 0';
+}
+
+#InfoTitle {
+  color: #e9e9ed;
+  font-size: 23px;
+  font-weight: 500;
+}
+
+#InfoArtist {
+  color: #71747b;
+  font-size: 17px;
+}
+
+#InfoComment {
+  color: #4a4d54;
+  font-size: 15px;
+}
+
+#InfoCaption {
+  color: #4a4d54;
+  font-size: 11px;
+  font-weight: 600;
+  padding-right: 6px;
+}
+
+#InfoValue {
+  color: #e9e9ed;
+  font-size: 26px;
+  font-weight: 500;
+  padding-right: 18px;
+}
+
+#SidebarWrap,
+#LibraryWrap {
+  background-color: #0a0a0c;
+  border: 1px solid #17181c;
+  border-radius: 6px;
+}
+
+#SideRight {
+  background-color: #0a0a0c;
+  border: 1px solid #17181c;
+  border-radius: 6px;
+  qproperty-layoutSpacing: 6;
+}
+
+#LibraryCover {
+  background-color: #101115;
+}
+
+#LoadButton {
+  background-color: #d2670f;
+  border-radius: 4px;
+  color: #0a0a0b;
+  font-size: 20px;
+  font-weight: 600;
+  margin: 2px;
+}
+
+#LoadButton[value="1"] {
+  background-color: #7a3c09;
+  color: #f0d9c6;
+}
+
+#LibraryRow QScrollBar:vertical {
+  background-color: #0a0a0c;
+  border: 0;
+  width: 6px;
+}
+
+#LibraryRow QScrollBar::handle:vertical {
+  background-color: #3c3f45;
+  border-radius: 3px;
+}
+
+#LibraryRow QScrollBar::add-line,
+#LibraryRow QScrollBar::sub-line,
+#LibraryRow QScrollBar::add-page,
+#LibraryRow QScrollBar::sub-page {
+  background: transparent;
+  height: 0;
+  width: 0;
+}
+
+#LibraryRow QScrollBar:horizontal {
+  height: 0;
+}
+
+#LibraryRow WTrackTableViewHeader::section {
+  background-color: #0d0e11;
+  color: #63666d;
+  border: 0;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 10px 8px;
+}
+
+#LibraryRow QTableView,
+#LibraryRow WLibraryTextBrowser {
+  background-color: #0a0a0c;
+  alternate-background-color: #0a0a0c;
+  color: #c7cad0;
+  font-size: 20px;
+  gridline-color: #17181c;
+  /* solid orange, dark text: the old #1d1006 was too close to the row background to find at a glance */
+  selection-background-color: #d2670f;
+  selection-color: #0a0a0b;
+  border: none;
+}
+
+#LibraryRow QTableView::item:selected {
+  background-color: #d2670f;
+  color: #0a0a0b;
+  font-weight: 600;
+}
+
+#LibraryRow WLibrarySidebar,
+#Sidebar {
+  background-color: transparent;
+  color: #6e7178;
+  font-size: 19px;
+  font-weight: 500;
+  selection-background-color: #d2670f;
+  selection-color: #0a0a0b;
+  border: none;
+}
+
+#LibraryRow QPushButton,
+#LibraryRow QSpinBox,
+#LibraryRow QComboBox,
+#LibraryRow QComboBox QAbstractScrollArea {
+  background-color: #0d0e11;
+  color: #e9e9ed;
+}
+
+/* ------------------------------------------------------------------ samplers (plain, not designed yet) */
+
+#SamplerSide {
+  background-color: transparent;
+  qproperty-layoutSpacing: 4;
+}
+
+#SamplerHeading {
+  color: #63666d;
+  font-size: 22px;
+  font-weight: 600;
+  padding-left: 6px;
+}
+
+#SamplerPad {
+  background-color: #0d0e11;
+  border: 1px solid #1b1d22;
+  border-radius: 4px;
+  qproperty-layoutSpacing: 4;
+  qproperty-layoutContentsMargins: '6 6 6 6';
+}
+
+#SamplerNum {
+  background-color: #d2670f;
+  color: #0a0a0b;
+  border-radius: 3px;
+  font-size: 18px;
+  font-weight: 600;
+  qproperty-alignment: AlignCenter;
+}
+
+#SamplerTitle {
+  color: #71747b;
+  font-size: 17px;
+  padding-left: 8px;
+}
+
+#SamplerLoad {
+  background-color: #0d0e11;
+  border: 1px solid #1b1d22;
+  border-radius: 4px;
+  color: #5a5d64;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+#SamplerPlay {
+  background-color: #131418;
+  border: 1px solid #1b1d22;
+  border-radius: 4px;
+  color: #35c464;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+#SamplerPlay[value="1"] {
+  background-color: #d2670f;
+  border-color: #d2670f;
+  color: #0a0a0b;
+}
+
+/* ================================================================== v0.3 additions
+   Empty deck look, time toggle, star rating, and "breathing room": QLabel-based widgets honour padding/margin in a
+   stylesheet, qproperty-layoutContentsMargins does not, so the space to the box edges is set per widget here. */
+
+#NoCover {
+  background-color: #0e0f12;
+  border: 1px solid #1b1d22;
+  color: #3c3f45;
+  font-size: 15px;
+  font-weight: 600;
+  qproperty-alignment: AlignCenter;
+}
+
+#NoCoverSmall {
+  background-color: #0e0f12;
+  border: 1px solid #1b1d22;
+}
+
+#TimeToggle {
+  background-color: transparent;
+  border: none;
+}
+
+#OverviewClip {
+  background-color: #0b0c0e;
+  border-radius: 4px;
+}
+
+#StripBadge {
+  background-color: #d2670f;
+  color: #0a0a0b;
+  border-radius: 3px;
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0px 8px;
+  qproperty-alignment: AlignCenter;
+}
+
+#InfoHint {
+  color: #4a4d54;
+  font-size: 17px;
+  padding: 6px 10px;
+}
+
+#InfoStars,
+WStarRating {
+  color: #d2670f;
+  background-color: transparent;
+}
+
+#LoopBox[highlight="1"] {
+  background-color: #1d1006;
+  border-color: #7a3c09;
+}
+
+/* top bar */
+#TopCaption { padding-left: 14px; }
+#TopHint { padding-right: 14px; }
+
+/* deck panel */
+#DeckBadge { margin: 0px 6px 0px 8px; }
+#DeckTitle { padding-left: 4px; }
+#DeckArtist { padding-right: 14px; }
+#BoxCaption,
+#BoxCaptionAccent { padding: 6px 0px 0px 10px; }
+#BigTime { padding-left: 8px; }
+#BoxFoot { padding: 0px 0px 6px 10px; }
+#BigBpm { padding-left: 10px; }
+#TempoValue { padding: 0px 0px 6px 10px; }
+#TempoPercent { padding-bottom: 6px; }
+#TagLeader,
+#TagFollower { margin: 4px 10px 0px 0px; }
+#TagRange { margin: 0px 10px 8px 0px; }
+#BigKey { padding-left: 10px; }
+#KeyShiftCaption,
+#KeyOrig,
+#KeyShiftValue { padding-left: 10px; }
+#TagMt { margin: 0px 8px 8px 8px; }
+#LoopCaption { padding-left: 14px; }
+
+/* strip and Browse cards */
+#StripTitle { padding-left: 4px; }
+#StripArtist { color: #4a4d54; font-size: 16px; padding-left: 4px; }
+#StripTime { padding-right: 14px; qproperty-alignment: 'AlignVCenter | AlignRight'; }
+#StripValue { padding-right: 4px; }
+#CardTitle,
+#CardArtist { padding-left: 4px; }
+#CardTime,
+#CardBpm,
+#CardKey,
+#CardRate { padding-right: 6px; }
+#CardCaption { padding-right: 6px; }
+
+/* Browse info block */
+#InfoTitle,
+#InfoArtist,
+#InfoComment { padding-left: 10px; padding-right: 10px; }
+#InfoCaption { padding-left: 10px; }
+
+/* samplers */
+#SamplerNum { margin: 4px; }
+#SamplerLoad { margin: 4px 6px 4px 0px; }
+#SamplerPlay { margin: 0px 4px 4px 4px; }
+
+/* Search box: the arrow on the right opens the search HISTORY list (empty until you have searched and pressed Enter).
+   It does nothing on a touch screen, so it is hidden. */
+WSearchLineEdit::drop-down {
+  width: 0px;
+  border: none;
+}
+
+WSearchLineEdit::down-arrow {
+  image: none;
+  width: 0px;
+}
+
+/* ================================================================== v0.4
+   Focus: thin orange outline on the Browse widget that has keyboard/controller focus (sidebar, track table, search box).
+   The border is transparent when not focused so nothing moves. */
+#LibraryRow QTableView,
+#LibraryRow WLibrarySidebar,
+#Sidebar {
+  border: 1px solid transparent;
+}
+
+#LibraryRow QTableView:focus,
+#LibraryRow WLibrarySidebar:focus,
+#Sidebar:focus {
+  border: 1px solid #d2670f;
+}
+
+WSearchLineEdit:focus,
+WSearchLineEdit QLineEdit:focus {
+  border-bottom: 2px solid #d2670f;
+}
+
+/* Search bar focus: the whole search block gets the orange outline (bound to [Library],focused_widget = 1). */
+#TopBlockSearch {
+  background-color: #0d0e11;
+  border: 1px solid #1b1d22;
+  border-radius: 5px;
+  qproperty-layoutSpacing: 12;
+}
+
+#TopBlockSearch[highlight="1"] {
+  border: 1px solid #d2670f;
+}
+
+/* ================================================================== v0.5
+   Track-load error banner (needs the stable 2 patch build; on stock Mixxx it never shows). */
+#ErrorBanner {
+  background-color: #7a1a12;
+  border-bottom: 2px solid #e71e27;
+}
+
+#ErrorBannerText {
+  color: #ffffff;
+  font-size: 20px;
+  font-weight: 600;
+  qproperty-alignment: AlignCenter;
+}
+
+/* ================================================================== v0.6
+   Rekordbox loading banner (needs the stable 2 patch build; on stock Mixxx it never shows). */
+
+
+/* ================================================================== Settings tab (from the design, "Turn 3 - settings")
+   Segments are WidgetStacks: the lit page is a SetSegOn label, every other page a SetSegOff button. */
+
+/* One spacing system on this page (keep in step with BAR / PAD / TIGHT in settings_xml()):
+   8 between neighbours and inside a block, 16 between blocks and as card padding, controls 56 high. */
+
+#SettingsPage,
+#SetCol {
+  background-color: transparent;
+  qproperty-layoutSpacing: 8;
+}
+
+#SetCard {
+  background-color: #0d0e11;
+  border: 1px solid #1b1d22;
+  border-radius: 5px;
+  qproperty-layoutSpacing: 0;
+}
+
+#SetCardBody {
+  background-color: transparent;
+  qproperty-layoutSpacing: 16;
+}
+
+#SetRecRow {
+  background-color: transparent;
+  qproperty-layoutSpacing: 16;
+}
+
+#SetCardHead {
+  background-color: transparent;
+  qproperty-layoutSpacing: 8;
+}
+
+#SetCardNum {
+  color: #d2670f;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+#SetCardTitle {
+  color: #e9e9ed;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+#SetGroup,
+#SetGroupRow {
+  background-color: transparent;
+  qproperty-layoutSpacing: 8;
+}
+
+#SetGroupLabel {
+  color: #8a8d92;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+#SetHint {
+  color: #71747b;
+  font-size: 13px;
+}
+
+#SetDeckName {
+  color: #e9e9ed;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+#SetSegBar,
+#SetStep {
+  background-color: #08090a;
+  border: 1px solid #1b1d22;
+  border-radius: 6px;
+  qproperty-layoutSpacing: 3;
+  qproperty-layoutContentsMargins: '3 3 3 3';
+}
+
+#SetStep {
+  qproperty-layoutSpacing: 0;
+  qproperty-layoutContentsMargins: '0 0 0 0';
+}
+
+#SetSegOn {
+  background-color: #d2670f;
+  color: #0a0a0b;
+  border-radius: 4px;
+  font-size: 15px;
+  font-weight: 600;
+  qproperty-alignment: AlignCenter;
+}
+
+#SetSegOff {
+  background-color: transparent;
+  border: none;
+  color: #8a8d92;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+#SetSegDimOn {
+  background-color: #2a1b0f;
+  color: #6b4c30;
+  border-radius: 4px;
+  font-size: 15px;
+  font-weight: 600;
+  qproperty-alignment: AlignCenter;
+}
+
+#SetSegDim {
+  color: #3c3f45;
+  font-size: 15px;
+  font-weight: 600;
+  qproperty-alignment: AlignCenter;
+}
+
+#SetStepBtn {
+  background-color: transparent;
+  border: none;
+  color: #e9e9ed;
+  font-size: 30px;
+}
+
+#SetStepVal {
+  color: #e9e9ed;
+  font-size: 22px;
+  font-weight: 500;
+  qproperty-alignment: AlignCenter;
+}
+
+#SetSwitch {
+  background-color: transparent;
+  border: none;
+}
+
+#SetChip,
+#SetChipOrange {
+  background-color: transparent;
+  border: 1px solid #2a2c31;
+  border-radius: 5px;
+  color: #8a8d92;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+#SetChipOrange {
+  border-color: #7a3c09;
+  color: #d2670f;
+  font-size: 14px;
+}
+
+#SetChipOn {
+  background-color: #d2670f;
+  border: 1px solid #d2670f;
+  border-radius: 5px;
+  color: #0a0a0b;
+  font-size: 13px;
+  font-weight: 600;
+  qproperty-alignment: AlignCenter;
+}
+
+#SetShowsAs {
+  color: #5a5d64;
+  font-size: 11px;
+  font-weight: 600;
+  qproperty-alignment: 'AlignRight | AlignVCenter';
+}
+
+#SetKeyEx {
+  color: #e9e9ed;
+  font-size: 18px;
+  font-weight: 500;
+  qproperty-alignment: 'AlignRight | AlignVCenter';
+}
+
+#SetEqBand {
+  background-color: transparent;
+  border: 1px solid #1b1d22;
+  border-radius: 5px;
+  qproperty-layoutSpacing: 8;
+}
+
+#SetEqName {
+  color: #8a8d92;
+  font-size: 14px;
+  font-weight: 600;
+  padding-top: 10px;
+  qproperty-alignment: AlignCenter;
+}
+
+#SetEqVal {
+  color: #e9e9ed;
+  font-size: 20px;
+  font-weight: 500;
+  padding-bottom: 12px;
+  qproperty-alignment: AlignCenter;
+}
+
+#SetEqScaleTop {
+  color: #5a5d64;
+  font-size: 12px;
+  padding-top: 6px;
+  qproperty-alignment: 'AlignRight | AlignTop';
+}
+
+#SetEqScaleMid {
+  color: #5a5d64;
+  font-size: 12px;
+  qproperty-alignment: 'AlignRight | AlignVCenter';
+}
+
+#SetEqScaleBot {
+  color: #5a5d64;
+  font-size: 12px;
+  padding-bottom: 6px;
+  qproperty-alignment: 'AlignRight | AlignBottom';
+}
+
+#SetEqRow,
+#SetGrid2,
+#SetMetaRow {
+  background-color: transparent;
+  qproperty-layoutSpacing: 8;
+}
+
+#SetGrid2 {
+  qproperty-layoutSpacing: 8;
+}
+
+#SetFader {
+  background-color: transparent;
+}
+
+#SetRecLight {
+  background-color: #3a1013;
+  border-radius: 7px;
+}
+
+#SetRecLight[highlight="1"],
+#SetRecLight[highlight="2"] {
+  background-color: #e11e27;
+}
+
+#SetRecState {
+  color: #8a8d92;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+#SetRecStateOn {
+  color: #ef4a50;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+#SetRecTime {
+  color: #5a5d64;
+  font-size: 44px;
+  font-weight: 500;
+}
+
+#SetRecTime[highlight="1"],
+#SetRecTime[highlight="2"] {
+  color: #e9e9ed;
+}
+
+/* recording indicator in the top bar (Settings tab only) */
+
+#TopRec {
+  background-color: transparent;
+  border: 1px solid #5a1014;
+  border-radius: 4px;
+  qproperty-layoutSpacing: 8;
+  qproperty-layoutContentsMargins: '10 0 10 0';
+}
+
+#TopRecDot {
+  background-color: #e11e27;
+  border-radius: 5px;
+}
+
+#TopRecText {
+  color: #ef4a50;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+#TopRecTime {
+  color: #e9e9ed;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+/* ---- Settings: parts that are drawn but not built yet (inert), and the tag that says so ---- */
+
+#SetPowerOff {
+  background-color: #0f0708;
+  border: 1px solid #5a1014;
+  border-radius: 5px;
+  color: #ef4a50;
+  font-size: 14px;
+  font-weight: 600;
+  qproperty-alignment: AlignCenter;
+}
+
+#SetNote {
+  color: #5a5d64;
+  font-size: 13px;
+  qproperty-alignment: 'AlignRight | AlignVCenter';
+}
+
+#SetUsbRow {
+  background-color: #08090a;
+  border: 1px solid #1b1d22;
+  border-radius: 5px;
+}
+
+#SetUsbName {
+  color: #e9e9ed;
+  font-size: 19px;
+  font-weight: 500;
+}
+
+#SetUsbMeta {
+  color: #8a8d92;
+  font-size: 14px;
+  padding-left: 10px;
+}
+
+#SetUsbWarn {
+  color: #d2670f;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+#SetAboutRule {
+  background-color: #17181c;
+}
+
+#SetAboutKey {
+  color: #5a5d64;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+#SetAboutVal {
+  color: #c7cad0;
+  font-size: 14px;
+}
+
+/* ---- Settings: live parts added with the stable 3 Settings backend ([GRV6] controls) ---- */
+
+#SetHintAccent {
+  color: #d2670f;
+  font-size: 13px;
+}
+
+#SetChipOrangeFull {
+  background-color: #d2670f;
+  border: 1px solid #d2670f;
+  border-radius: 5px;
+  color: #0a0a0b;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+#SetChipIdle {
+  border: 1px solid #2a2c31;
+  border-radius: 5px;
+  color: #5a5d64;
+  font-size: 13px;
+  font-weight: 600;
+  qproperty-alignment: AlignCenter;
+}
+
+#SetPowerOff[value="1"] {
+  background-color: #e11e27;
+  border-color: #e11e27;
+  color: #ffffff;
+}
+
+#SetUsbList {
+  background-color: transparent;
+  qproperty-layoutSpacing: 8;
+}
+
+/* row border follows [GRV6],usbN_state: 2 waiting for the second tap, 4 safe to remove, 5 failed */
+#SetUsbRow[highlight="2"] {
+  border-color: #7a3c09;
+  background-color: #1d1006;
+}
+
+#SetUsbRow[highlight="4"] {
+  border-color: #1f5a33;
+  background-color: #08140c;
+}
+
+#SetUsbRow[highlight="5"] {
+  border-color: #5a1014;
+  background-color: #0f0708;
+}
+
+#SetUsbStatus {
+  color: #8a8d92;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+#SetUsbSafe {
+  color: #35c464;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+#SetUsbFail {
+  color: #ef4a50;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+#SetUsedMeter {
+  background-color: transparent;
+}
+
+#SetUsbEmpty {
+  background-color: transparent;
+  border: 1px dashed #1b1d22;
+  border-radius: 5px;
+}
+
+#SetUsbEmptyText {
+  color: #71747b;
+  font-size: 16px;
+  qproperty-alignment: AlignCenter;
+}
+
+/* accent swatches: fixed colours in rgb() so the theme generator does not recolour them */
+#SetSwatchBar {
+  background-color: transparent;
+  qproperty-layoutSpacing: 6;
+}
+
+#SetSwatch0,
+#SetSwatchOn0 { background-color: rgb(210, 103, 15); }
+#SetSwatch1,
+#SetSwatchOn1 { background-color: rgb(39, 168, 90); }
+#SetSwatch2,
+#SetSwatchOn2 { background-color: rgb(47, 128, 216); }
+#SetSwatch3,
+#SetSwatchOn3 { background-color: rgb(214, 58, 58); }
+#SetSwatch4,
+#SetSwatchOn4 { background-color: rgb(141, 85, 217); }
+
+#SetSwatch0,
+#SetSwatch1,
+#SetSwatch2,
+#SetSwatch3,
+#SetSwatch4 {
+  border: 3px solid transparent;
+  border-radius: 6px;
+  color: rgba(10, 10, 11, 150);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+#SetSwatchOn0,
+#SetSwatchOn1,
+#SetSwatchOn2,
+#SetSwatchOn3,
+#SetSwatchOn4 {
+  border: 3px solid #e9e9ed;
+  border-radius: 6px;
+  color: rgb(10, 10, 11);
+  font-size: 11px;
+  font-weight: 600;
+  qproperty-alignment: AlignCenter;
+}

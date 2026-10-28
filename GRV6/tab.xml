@@ -1,0 +1,21 @@
+<!DOCTYPE template>
+<!--
+  One tab button in the top bar.
+  Variables: key = [Skin] control that is the trigger of the page, label, w = width.
+  Pressing writes 1 to the trigger; the WidgetStack in skin.xml switches page and resets
+  the triggers of the other pages, so the button is lit while its page is shown.
+-->
+<Template>
+  <PushButton>
+    <ObjectName>TabButton</ObjectName>
+    <Size><Variable name="w"/>f,50f</Size>
+    <NumberStates>2</NumberStates>
+    <LeftClickIsPushButton>true</LeftClickIsPushButton>
+    <State><Number>0</Number><Text><Variable name="label"/></Text></State>
+    <State><Number>1</Number><Text><Variable name="label"/></Text></State>
+    <Connection>
+      <ConfigKey>[Skin],<Variable name="key"/></ConfigKey>
+      <EmitOnDownPress>true</EmitOnDownPress>
+    </Connection>
+  </PushButton>
+</Template>

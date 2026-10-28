@@ -1,0 +1,215 @@
+<!DOCTYPE template>
+<!--
+  Top bar (50 px): tabs | CFX + FX STRIP (or search on Browse) | CPU | MASTER | clock.
+  The middle block is a WidgetStack on [Skin],grv6_tab (0 = Main, 1 = Browse, 2 = Sampler, 3 = Settings),
+  the same control that the page stack in skin.xml writes.
+-->
+<Template>
+  <WidgetGroup>
+    <ObjectName>TopBar</ObjectName>
+    <Layout>horizontal</Layout>
+    <SizePolicy>me,f</SizePolicy>
+    <MinimumSize>0,50</MinimumSize>
+    <MaximumSize>-1,50</MaximumSize>
+    <Children>
+
+      <!-- tabs. RMX EMU is not built yet (no button, no page). -->
+      <WidgetGroup>
+        <ObjectName>Transparent</ObjectName>
+        <Layout>horizontal</Layout>
+        <SizePolicy>min,f</SizePolicy>
+        <Children>
+          <Template src="skin:tab.xml">
+            <SetVariable name="key">grv6_show_main</SetVariable>
+            <SetVariable name="label">MAIN</SetVariable>
+            <SetVariable name="w">122</SetVariable>
+          </Template>
+          <Template src="skin:tab.xml">
+            <SetVariable name="key">show_maximized_library</SetVariable>
+            <SetVariable name="label">BROWSE</SetVariable>
+            <SetVariable name="w">122</SetVariable>
+          </Template>
+          <Template src="skin:tab.xml">
+            <SetVariable name="key">grv6_show_sampler</SetVariable>
+            <SetVariable name="label">SAMPLER</SetVariable>
+            <SetVariable name="w">122</SetVariable>
+          </Template>
+          <Template src="skin:tab.xml">
+            <SetVariable name="key">grv6_show_settings</SetVariable>
+            <SetVariable name="label">SETTINGS</SetVariable>
+            <SetVariable name="w">122</SetVariable>
+          </Template>
+        </Children>
+      </WidgetGroup>
+
+      <!-- middle block -->
+      <WidgetStack currentpage="[Skin],grv6_tab">
+        <SizePolicy>me,me</SizePolicy>
+        <Children>
+
+          <!-- 0: Main -->
+          <WidgetGroup>
+            <ObjectName>TopBlock</ObjectName>
+            <Layout>horizontal</Layout>
+            <SizePolicy>me,me</SizePolicy>
+            <Children>
+              <Template src="skin:top_fx.xml"/>
+            </Children>
+          </WidgetGroup>
+
+          <!-- 1: Browse. Orange outline while the search bar has focus ([Library],focused_widget: 1 = search bar, 2 = sidebar, 3 = track table). -->
+          <WidgetGroup>
+            <ObjectName>TopBlockSearch</ObjectName>
+            <Layout>horizontal</Layout>
+            <SizePolicy>me,me</SizePolicy>
+            <Connection>
+              <ConfigKey>[Library],focused_widget</ConfigKey>
+              <Transform><IsEqual>1</IsEqual></Transform>
+              <BindProperty>highlight</BindProperty>
+            </Connection>
+            <Children>
+              <Label><ObjectName>TopCaption</ObjectName><Text>SEARCH</Text></Label>
+              <SearchBox>
+                <ObjectName>TopSearch</ObjectName>
+                <SizePolicy>me,me</SizePolicy>
+              </SearchBox>
+            </Children>
+          </WidgetGroup>
+
+          <!-- 2: Sampler (shows the FX block again) -->
+          <WidgetGroup>
+            <ObjectName>TopBlock</ObjectName>
+            <Layout>horizontal</Layout>
+            <SizePolicy>me,me</SizePolicy>
+            <Children>
+              <Template src="skin:top_fx.xml"/>
+            </Children>
+          </WidgetGroup>
+
+          <!-- 3: Settings -->
+          <WidgetGroup>
+            <ObjectName>TopBlock</ObjectName>
+            <Layout>horizontal</Layout>
+            <SizePolicy>me,me</SizePolicy>
+            <Children>
+              <Label><ObjectName>TopCaption</ObjectName><Text>SETTINGS</Text></Label>
+              <Label><ObjectName>TopHint</ObjectName><Text>Changes save automatically</Text><SizePolicy>me,me</SizePolicy></Label>
+              <!-- recording indicator, only while [Recording],status is on -->
+              <WidgetGroup>
+                <ObjectName>TopRec</ObjectName>
+                <Layout>horizontal</Layout>
+                <Size>170f,30f</Size>
+                <Connection>
+                  <ConfigKey>[Recording],status</ConfigKey>
+                  <BindProperty>visible</BindProperty>
+                </Connection>
+                <Children>
+                  <Label><ObjectName>TopRecDot</ObjectName><Size>10f,10f</Size></Label>
+                  <Label><ObjectName>TopRecText</ObjectName><Text>REC</Text><Size>40f,30f</Size></Label>
+                  <RecordingDuration>
+                    <ObjectName>TopRecTime</ObjectName>
+                    <SizePolicy>me,me</SizePolicy>
+                    <InactiveText>0:00:00</InactiveText>
+                    <Alignment>left</Alignment>
+                  </RecordingDuration>
+                </Children>
+              </WidgetGroup>
+            </Children>
+          </WidgetGroup>
+
+        </Children>
+      </WidgetStack>
+
+      <!-- CPU: stock Mixxx shows audio latency usage here (see SKIN-NOTES.md) -->
+      <WidgetGroup>
+        <ObjectName>TopBlock</ObjectName>
+        <Layout>horizontal</Layout>
+        <Size>178f,0me</Size>
+        <Children>
+          <Label><ObjectName>TopCaption</ObjectName><Text>CPU</Text></Label>
+          <VuMeter>
+            <ObjectName>TopCpu</ObjectName>
+            <TooltipId>audio_latency_usage</TooltipId>
+            <MinimumSize>96,8</MinimumSize>
+            <MaximumSize>96,8</MaximumSize>
+            <SizePolicy>f,f</SizePolicy>
+            <PathVu><Variable name="img"/>/cpu.png</PathVu>
+            <PathBack><Variable name="img"/>/cpu_bg.png</PathBack>
+            <Horizontal>true</Horizontal>
+            <PeakHoldSize>0</PeakHoldSize>
+            <Connection>
+              <ConfigKey>[App],audio_latency_usage</ConfigKey>
+            </Connection>
+          </VuMeter>
+        </Children>
+      </WidgetGroup>
+
+      <!-- MASTER -->
+      <WidgetGroup>
+        <ObjectName>TopBlock</ObjectName>
+        <Layout>horizontal</Layout>
+        <Size>218f,0me</Size>
+        <Children>
+          <Label><ObjectName>TopCaption</ObjectName><Text>MASTER</Text></Label>
+          <WidgetGroup>
+            <ObjectName>Transparent</ObjectName>
+            <Layout>vertical</Layout>
+            <SizePolicy>min,me</SizePolicy>
+            <Children>
+              <VuMeter>
+                <ObjectName>MasterVu</ObjectName>
+                <TooltipId>main_VuMeterL</TooltipId>
+                <MinimumSize>130,7</MinimumSize>
+                <MaximumSize>130,7</MaximumSize>
+                <SizePolicy>f,f</SizePolicy>
+                <PathVu><Variable name="img"/>/vu_main.png</PathVu>
+                <PathBack><Variable name="img"/>/vu_main_bg.png</PathBack>
+                <Horizontal>true</Horizontal>
+                <PeakHoldSize>4</PeakHoldSize>
+                <PeakHoldTime>500</PeakHoldTime>
+                <PeakFallTime>30</PeakFallTime>
+                <PeakFallStep>1</PeakFallStep>
+                <Connection>
+                  <ConfigKey>[Main],vu_meter_left</ConfigKey>
+                </Connection>
+              </VuMeter>
+              <VuMeter>
+                <ObjectName>MasterVu</ObjectName>
+                <TooltipId>main_VuMeterR</TooltipId>
+                <MinimumSize>130,7</MinimumSize>
+                <MaximumSize>130,7</MaximumSize>
+                <SizePolicy>f,f</SizePolicy>
+                <PathVu><Variable name="img"/>/vu_main.png</PathVu>
+                <PathBack><Variable name="img"/>/vu_main_bg.png</PathBack>
+                <Horizontal>true</Horizontal>
+                <PeakHoldSize>4</PeakHoldSize>
+                <PeakHoldTime>500</PeakHoldTime>
+                <PeakFallTime>30</PeakFallTime>
+                <PeakFallStep>1</PeakFallStep>
+                <Connection>
+                  <ConfigKey>[Main],vu_meter_right</ConfigKey>
+                </Connection>
+              </VuMeter>
+            </Children>
+          </WidgetGroup>
+        </Children>
+      </WidgetGroup>
+
+      <!-- clock (the mockup's POWER button is left out until the Settings tab exists) -->
+      <WidgetGroup>
+        <ObjectName>TopBlock</ObjectName>
+        <Layout>horizontal</Layout>
+        <Size>110f,0me</Size>
+        <Children>
+          <Time>
+            <ObjectName>TopClock</ObjectName>
+            <TooltipId>time</TooltipId>
+            <CustomFormat>HH:mm</CustomFormat>
+            <SizePolicy>me,me</SizePolicy>
+          </Time>
+        </Children>
+      </WidgetGroup>
+
+    </Children>
+  </WidgetGroup>
+</Template>

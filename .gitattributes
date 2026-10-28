@@ -1,2 +1,7 @@
-* text eol=lf
+* text=auto eol=lf
 *.patch text eol=lf
+*.png binary
+*.jpg binary
+*.ttf binary
+*.otf binary
+*.pdf binary

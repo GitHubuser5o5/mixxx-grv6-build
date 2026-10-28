@@ -5,8 +5,12 @@ name: Build Mixxx 2.5.0 "stable 3" (arm64 .deb)
 # build.yml and is not touched by this file.
 # Run it by hand: Actions tab -> "Build Mixxx 2.5.0 stable 3" -> Run workflow.
 # The package version ends in +grv6.s3rN.1, which sorts above every stable 2 (+grv6.rN.1) version.
+# Each run also publishes a GitHub Release "stable3-rN" with the two .debs.
 on:
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -44,5 +48,23 @@ jobs:
         with:
           name: mixxx-stable3-deb
           path: |
+            /build/mixxx_*.deb
+            /build/mixxx-data_*.deb
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: stable3-r${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          name: Stable 3 build ${{ github.run_number }} (2.5.0+dfsg-3+grv6.s3r${{ github.run_number }}.1)
+          body: |
+            Mixxx 2.5.0 (Debian trixie, arm64) with the patches in `patches/series-stable3`, built from ${{ github.sha }}.
+
+            Install on the Pi (both files in the current folder):
+            ```
+            sudo apt install --allow-downgrades ./mixxx_*.deb ./mixxx-data_*.deb
+            ```
+            Skin and controller mapping: copy `GRV6/` and `controller/` from the same commit (see the README).
+          files: |
             /build/mixxx_*.deb
             /build/mixxx-data_*.deb

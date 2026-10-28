@@ -1,0 +1,63 @@
+<!DOCTYPE template>
+<!--
+  One sampler pad. Variable: sampler (1-16).
+  Left click = play from cue (the controller mapping uses cue_gotoandplay too), right click = stop.
+  Deliberately plain: the Sampler tab has no design yet.
+-->
+<Template>
+  <WidgetGroup>
+    <ObjectName>SamplerPad</ObjectName>
+    <Layout>vertical</Layout>
+    <!-- fixed width: a long file name must not stretch the pad -->
+    <Size>234f,0me</Size>
+    <Children>
+      <WidgetGroup>
+        <ObjectName>Transparent</ObjectName>
+        <Layout>horizontal</Layout>
+        <SizePolicy>me,f</SizePolicy>
+        <MinimumSize>0,36</MinimumSize>
+        <MaximumSize>-1,36</MaximumSize>
+        <Children>
+          <Label><ObjectName>SamplerNum</ObjectName><Size>34f,36f</Size><Text><Variable name="sampler"/></Text></Label>
+          <TrackProperty>
+            <ObjectName>SamplerTitle</ObjectName>
+            <Group>[Sampler<Variable name="sampler"/>]</Group>
+            <Property>titleInfo</Property>
+            <SizePolicy>i,i</SizePolicy>
+            <MinimumSize>1</MinimumSize>
+            <Elide>right</Elide>
+          </TrackProperty>
+          <PushButton>
+            <ObjectName>SamplerLoad</ObjectName>
+            <Size>70f,36f</Size>
+            <NumberStates>1</NumberStates>
+            <State><Number>0</Number><Text>LOAD</Text></State>
+            <Connection>
+              <ConfigKey>[Sampler<Variable name="sampler"/>],LoadSelectedTrack</ConfigKey>
+              <ConnectValueToWidget>false</ConnectValueToWidget>
+            </Connection>
+          </PushButton>
+        </Children>
+      </WidgetGroup>
+      <PushButton>
+        <ObjectName>SamplerPlay</ObjectName>
+        <SizePolicy>me,me</SizePolicy>
+        <NumberStates>2</NumberStates>
+        <State><Number>0</Number><Text>PLAY</Text></State>
+        <State><Number>1</Number><Text>PLAYING</Text></State>
+        <Connection>
+          <ConfigKey>[Sampler<Variable name="sampler"/>],cue_gotoandplay</ConfigKey>
+          <ButtonState>LeftButton</ButtonState>
+        </Connection>
+        <Connection>
+          <ConfigKey>[Sampler<Variable name="sampler"/>],cue_default</ConfigKey>
+          <ButtonState>RightButton</ButtonState>
+        </Connection>
+        <Connection>
+          <ConfigKey>[Sampler<Variable name="sampler"/>],play_latched</ConfigKey>
+          <ConnectValueFromWidget>false</ConnectValueFromWidget>
+        </Connection>
+      </PushButton>
+    </Children>
+  </WidgetGroup>
+</Template>

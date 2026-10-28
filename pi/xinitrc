@@ -1,0 +1,15 @@
+#!/bin/sh
+# Kiosk session: no screen blanking by X (the skin's Settings > Sleep handles that), a bare window manager,
+# USB sticks mounted automatically under /media/$USER/<label>, and Mixxx restarted whenever it exits.
+# POWER OFF in the skin writes /tmp/grv6-poweroff; while it exists Mixxx is not restarted, so the shutdown
+# picture stays on screen until the Pi is off.
+xset s off -dpms
+xset s noblank
+openbox &
+udiskie --automount --no-notify --no-tray &
+sleep 3
+while true; do
+  mixxx --fullScreen
+  if [ -e /tmp/grv6-poweroff ]; then sleep 60; rm -f /tmp/grv6-poweroff; fi
+  sleep 2
+done

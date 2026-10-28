@@ -1,0 +1,190 @@
+<!DOCTYPE template>
+<!--
+  30 px strip under a deck panel: the OTHER deck of that side (e.g. deck 3 while deck 1 is selected).
+  Variable: channel (1-4).
+  Same row for loaded and empty decks; empty = No track loaded, xxxxx, xxx, xx and a dash for the time.
+  The mockup has a mini overview here; this uses a thin progress bar instead (playposition).
+-->
+<Template>
+  <TrackWidgetGroup>
+    <TrackColorAlpha><Variable name="card_tint"/></TrackColorAlpha>
+    <ObjectName>DeckStrip</ObjectName>
+    <Group>[Channel<Variable name="channel"/>]</Group>
+    <Layout>horizontal</Layout>
+    <SizePolicy>me,f</SizePolicy>
+    <MinimumSize>0,30</MinimumSize>
+    <MaximumSize>-1,30</MaximumSize>
+    <Children>
+
+      <CoverArt>
+        <ObjectName>StripCover</ObjectName>
+        <TooltipId>coverart</TooltipId>
+        <Size>30f,30f</Size>
+        <Group>[Channel<Variable name="channel"/>]</Group>
+        <Connection>
+          <ConfigKey>[Channel<Variable name="channel"/>],track_loaded</ConfigKey>
+          <BindProperty>visible</BindProperty>
+        </Connection>
+      </CoverArt>
+      <Label>
+        <ObjectName>NoCoverSmall</ObjectName>
+        <Size>30f,30f</Size>
+        <Connection>
+          <ConfigKey>[Channel<Variable name="channel"/>],track_loaded</ConfigKey>
+          <Transform><Not/></Transform>
+          <BindProperty>visible</BindProperty>
+        </Connection>
+      </Label>
+
+      <Label>
+        <ObjectName>StripBadge</ObjectName>
+        <Size>36f,24f</Size>
+        <Text><Variable name="channel"/></Text>
+      </Label>
+
+      <!-- Icon-only ON AIR indicator for this (hidden) deck - same icon as the deck column's,
+           just smaller and with no caption. Lit while this deck's channel fader is above 0. -->
+      <Label>
+        <ObjectName>StripOnAirIcon</ObjectName>
+        <Size>24f,24f</Size>
+        <Connection>
+          <ConfigKey>[Channel<Variable name="channel"/>],volume</ConfigKey>
+          <Transform><IsEqual>0</IsEqual><Not/></Transform>
+          <BindProperty>highlight</BindProperty>
+        </Connection>
+      </Label>
+
+      <TrackProperty>
+        <ObjectName>StripTitle</ObjectName>
+        <SizePolicy>me,me</SizePolicy>
+        <MinimumSize>1</MinimumSize>
+        <Property>title</Property>
+        <Group>[Channel<Variable name="channel"/>]</Group>
+        <Elide>right</Elide>
+        <Connection>
+          <ConfigKey>[Channel<Variable name="channel"/>],track_loaded</ConfigKey>
+          <BindProperty>visible</BindProperty>
+        </Connection>
+      </TrackProperty>
+      <Label>
+        <ObjectName>StripTitle</ObjectName>
+        <Text>No track loaded</Text>
+        <SizePolicy>me,me</SizePolicy>
+        <Connection>
+          <ConfigKey>[Channel<Variable name="channel"/>],track_loaded</ConfigKey>
+          <Transform><Not/></Transform>
+          <BindProperty>visible</BindProperty>
+        </Connection>
+      </Label>
+
+      <TrackProperty>
+        <ObjectName>StripArtist</ObjectName>
+        <Size>220f,0me</Size>
+        <Property>artist</Property>
+        <Group>[Channel<Variable name="channel"/>]</Group>
+        <Elide>right</Elide>
+        <Connection>
+          <ConfigKey>[Channel<Variable name="channel"/>],track_loaded</ConfigKey>
+          <BindProperty>visible</BindProperty>
+        </Connection>
+      </TrackProperty>
+      <Label>
+        <ObjectName>StripArtist</ObjectName>
+        <Text>xxxxx</Text>
+        <Size>220f,0me</Size>
+        <Connection>
+          <ConfigKey>[Channel<Variable name="channel"/>],track_loaded</ConfigKey>
+          <Transform><Not/></Transform>
+          <BindProperty>visible</BindProperty>
+        </Connection>
+      </Label>
+
+      <VuMeter>
+        <ObjectName>StripProgress</ObjectName>
+        <MinimumSize>230,6</MinimumSize>
+        <MaximumSize>230,6</MaximumSize>
+        <SizePolicy>f,f</SizePolicy>
+        <PathVu><Variable name="img"/>/progress_strip.png</PathVu>
+        <PathBack><Variable name="img"/>/progress_strip_bg.png</PathBack>
+        <Horizontal>true</Horizontal>
+        <PeakHoldSize>0</PeakHoldSize>
+        <Connection>
+          <ConfigKey>[Channel<Variable name="channel"/>],playposition</ConfigKey>
+        </Connection>
+      </VuMeter>
+
+      <NumberBpm>
+        <ObjectName>StripValue</ObjectName>
+        <Group>[Channel<Variable name="channel"/>]</Group>
+        <NumberOfDigits>1</NumberOfDigits>
+        <Size>70f,0me</Size>
+        <Alignment>right</Alignment>
+        <Connection>
+          <ConfigKey>[Channel<Variable name="channel"/>],bpm</ConfigKey>
+        </Connection>
+        <Connection>
+          <ConfigKey>[Channel<Variable name="channel"/>],track_loaded</ConfigKey>
+          <BindProperty>visible</BindProperty>
+        </Connection>
+      </NumberBpm>
+      <Label>
+        <ObjectName>StripValue</ObjectName>
+        <Text>xxx</Text>
+        <Size>70f,0me</Size>
+        <Alignment>right</Alignment>
+        <Connection>
+          <ConfigKey>[Channel<Variable name="channel"/>],track_loaded</ConfigKey>
+          <Transform><Not/></Transform>
+          <BindProperty>visible</BindProperty>
+        </Connection>
+      </Label>
+
+      <Label><ObjectName>StripSep</ObjectName><Text>|</Text></Label>
+
+      <Key>
+        <ObjectName>StripValue</ObjectName>
+        <Group>[Channel<Variable name="channel"/>]</Group>
+        <DisplayCents>false</DisplayCents>
+        <Size>100f,0me</Size>
+        <Alignment>center</Alignment>
+        <Connection>
+          <ConfigKey>[Channel<Variable name="channel"/>],visual_key</ConfigKey>
+        </Connection>
+        <Connection>
+          <ConfigKey>[Channel<Variable name="channel"/>],track_loaded</ConfigKey>
+          <BindProperty>visible</BindProperty>
+        </Connection>
+      </Key>
+      <Label>
+        <ObjectName>StripValue</ObjectName>
+        <Text>xx</Text>
+        <Size>100f,0me</Size>
+        <Alignment>center</Alignment>
+        <Connection>
+          <ConfigKey>[Channel<Variable name="channel"/>],track_loaded</ConfigKey>
+          <Transform><Not/></Transform>
+          <BindProperty>visible</BindProperty>
+        </Connection>
+      </Label>
+
+      <Label><ObjectName>StripSep</ObjectName><Text>|</Text></Label>
+
+      <!-- time (same TIME/REMAIN setting as the big time) -->
+      <Template src="skin:time_number.xml">
+        <SetVariable name="oname">StripTime</SetVariable>
+        <SetVariable name="minw">90</SetVariable>
+      </Template>
+      <Label>
+        <ObjectName>StripTime</ObjectName>
+        <Text>-:--</Text>
+        <Size>90f,0me</Size>
+        <Connection>
+          <ConfigKey>[Channel<Variable name="channel"/>],track_loaded</ConfigKey>
+          <Transform><Not/></Transform>
+          <BindProperty>visible</BindProperty>
+        </Connection>
+      </Label>
+
+    </Children>
+  </TrackWidgetGroup>
+</Template>

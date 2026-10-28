@@ -1,0 +1,47 @@
+<!DOCTYPE template>
+<!--
+  Track time of one deck (elapsed/remaining, set by [Controls],ShowDurationRemaining).
+  Variables: channel (1-4), oname = ObjectName of the number, minw = minimum width.
+
+  Mixxx's own NumberPos cycles TIME -> REMAIN -> TIME/REMAIN on every click. To get only TIME <-> REMAIN, a transparent
+  toggle button sits on top of the number (stacked layout, later child = on top) and takes the click instead.
+  It flips [Skin],grv6_time_remain and writes the same 0/1 to [Controls],ShowDurationRemaining.
+  Only shown while a track is loaded (the caller shows a placeholder otherwise).
+-->
+<Template>
+  <WidgetGroup>
+    <ObjectName>Transparent</ObjectName>
+    <Layout>stacked</Layout>
+    <SizePolicy>me,me</SizePolicy>
+    <MinimumSize><Variable name="minw"/>,0</MinimumSize>
+    <Connection>
+      <ConfigKey>[Channel<Variable name="channel"/>],track_loaded</ConfigKey>
+      <BindProperty>visible</BindProperty>
+    </Connection>
+    <Children>
+      <NumberPos>
+        <ObjectName><Variable name="oname"/></ObjectName>
+        <TooltipId>track_time</TooltipId>
+        <Group>[Channel<Variable name="channel"/>]</Group>
+        <NumberOfDigits>6</NumberOfDigits>
+        <SizePolicy>me,me</SizePolicy>
+      </NumberPos>
+      <PushButton>
+        <ObjectName>TimeToggle</ObjectName>
+        <SizePolicy>me,me</SizePolicy>
+        <NumberStates>2</NumberStates>
+        <State><Number>0</Number></State>
+        <State><Number>1</Number></State>
+        <Connection>
+          <ConfigKey>[Skin],grv6_time_remain</ConfigKey>
+          <EmitOnDownPress>true</EmitOnDownPress>
+        </Connection>
+        <Connection>
+          <ConfigKey>[Controls],ShowDurationRemaining</ConfigKey>
+          <ConnectValueToWidget>false</ConnectValueToWidget>
+          <EmitOnDownPress>true</EmitOnDownPress>
+        </Connection>
+      </PushButton>
+    </Children>
+  </WidgetGroup>
+</Template>
