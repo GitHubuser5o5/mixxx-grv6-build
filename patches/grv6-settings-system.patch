@@ -1,0 +1,757 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -1022,6 +1022,7 @@
+   src/mixer/samplerbank.cpp
+   src/mixxxapplication.cpp
+   src/mixxxmainwindow.cpp
++  src/grv6/grv6system.cpp
+   src/musicbrainz/chromaprinter.cpp
+   src/musicbrainz/crc.cpp
+   src/musicbrainz/gzip.cpp
+diff --git a/src/mixxxmainwindow.cpp b/src/mixxxmainwindow.cpp
+--- a/src/mixxxmainwindow.cpp
++++ b/src/mixxxmainwindow.cpp
+@@ -28,6 +28,7 @@
+ #include "dialog/dlgabout.h"
+ #include "dialog/dlgdevelopertools.h"
+ #include "dialog/dlgkeywheel.h"
++#include "grv6/grv6system.h"
+ #include "moc_mixxxmainwindow.cpp"
+ #include "preferences/dialog/dlgpreferences.h"
+ #ifdef __BROADCAST__
+@@ -322,6 +323,11 @@
+ 
+     tryParseAndSetDefaultStyleSheet();
+ 
++    // GRV6: backend of the GRV6 skin's Settings tab (startup defaults, sleep,
++    // power off, USB eject, theme). Created before the skin so the skin can
++    // bind to its [GRV6] controls; deleted with this window.
++    new Grv6System(this, pConfig);
++
+     if (!loadConfiguredSkin()) {
+         reportCriticalErrorAndQuit(
+                 "default skin cannot be loaded - see <b>mixxx</b> trace for more information");
+diff --git a/src/util/screensaver.h b/src/util/screensaver.h
+--- a/src/util/screensaver.h
++++ b/src/util/screensaver.h
+@@ -18,6 +18,13 @@
+    static void inhibit();
+    static void uninhibit();
+    static void triggerUserActivity();
++#if defined(Q_OS_LINUX)
++   // GRV6: blank the screen after `seconds` without input (0 = never), using
++   // the X server's own screen saver; any touch or controller input wakes it.
++   static void grv6SetSleepTimeout(int seconds);
++   // GRV6: blank the screen now.
++   static void grv6SleepNow();
++#endif
+ 
+ private:
+    static void inhibitInternal();
+diff --git a/src/util/screensaver.cpp b/src/util/screensaver.cpp
+--- a/src/util/screensaver.cpp
++++ b/src/util/screensaver.cpp
+@@ -185,6 +185,34 @@
+     }
+     return;
+ }
++
++namespace {
++Display* grv6OpenDisplay() {
++    const char* name = getenv("DISPLAY");
++    return XOpenDisplay(name ? name : ":0.0");
++}
++} // namespace
++
++void ScreenSaverHelper::grv6SetSleepTimeout(int seconds) {
++    Display* display = grv6OpenDisplay();
++    if (display == nullptr) {
++        return;
++    }
++    // interval 0: no cycling; blanking instead of a pattern.
++    XSetScreenSaver(display, seconds > 0 ? seconds : 0, 0, PreferBlanking, DefaultExposures);
++    XFlush(display);
++    XCloseDisplay(display);
++}
++
++void ScreenSaverHelper::grv6SleepNow() {
++    Display* display = grv6OpenDisplay();
++    if (display == nullptr) {
++        return;
++    }
++    XForceScreenSaver(display, ScreenSaverActive);
++    XFlush(display);
++    XCloseDisplay(display);
++}
+ // Disabling the method with DBus since it seems to be failing on several systems.
+ #if 0
+ void ScreenSaverHelper::triggerUserActivity()
+diff --git a/src/widget/wtracktableview.cpp b/src/widget/wtracktableview.cpp
+--- a/src/widget/wtracktableview.cpp
++++ b/src/widget/wtracktableview.cpp
+@@ -1520,6 +1520,12 @@
+         allowLoadTrackIntoPlayingDeck =
+                 m_pConfig->getValue<bool>(kConfigKeyAllowTrackLoadToPlayingDeck);
+     }
++    // GRV6: the skin's Settings tab ("LOAD ONTO PLAYING DECK", see
++    // grv6/grv6system.h) decides when it exists: 0 = allow, 1 = block.
++    const ConfigKey grv6LoadBlockKey(QStringLiteral("[GRV6]"), QStringLiteral("load_block"));
++    if (ControlObject::exists(grv6LoadBlockKey)) {
++        allowLoadTrackIntoPlayingDeck = ControlObject::get(grv6LoadBlockKey) < 0.5;
++    }
+     // If the track load override is disabled, check to see if a track is
+     // playing before trying to load it.
+     // Always load to preview deck.
+diff --git a/src/grv6/grv6system.h b/src/grv6/grv6system.h
+new file mode 100644
+--- /dev/null
++++ b/src/grv6/grv6system.h
+@@ -0,0 +1,114 @@
++#pragma once
++
++#include <QObject>
++#include <QString>
++#include <QStringList>
++#include <QTimer>
++#include <array>
++#include <memory>
++
++#include "preferences/usersettings.h"
++
++class ControlObject;
++class ControlPushButton;
++class MixxxMainWindow;
++
++/// GRV6: the backend of the GRV6 skin's Settings tab - everything a skin button
++/// cannot do on its own. All controls live in the [GRV6] group and are created
++/// before the skin loads, so the skin can bind to them:
++///
++///   startup_quantize (0/1), startup_tempo (0-3 = +-6/10/16/50 %),
++///   startup_time (0 TIME, 1 REMAIN)   applied once after the first skin load
++///   xf_curve (0 smooth, 1 sharp cut)  applied at start and on every change
++///   load_block (0 allow, 1 block)     read by WTrackTableView when loading
++///   sleep (0 off, 1-5 = 5/10/15/30/60 minutes), sleep_now (push button)
++///   power_off (hold 5 s), power_holding (0 idle, 1 held, 2 shutting down)
++///   theme (0 dark, 1 light), accent (0-4)  = the skin colour scheme
++///   usb_count, usbN_state/size_gb/free_gb/used/deck/fail, usbN_eject (N = 1-4)
++///
++/// The saved ones (startup_*, xf_curve, load_block, sleep) are persistent
++/// controls; theme and accent are stored as the skin colour scheme name.
++class Grv6System : public QObject {
++    Q_OBJECT
++  public:
++    Grv6System(MixxxMainWindow* pMainWindow, UserSettingsPointer pConfig);
++    ~Grv6System() override;
++
++  public slots:
++    void slotSkinLoaded();
++
++  protected:
++    bool eventFilter(QObject* pObject, QEvent* pEvent) override;
++
++  private:
++    static constexpr int kUsbSlots = 4;
++
++    enum class UsbState {
++        Empty = 0,
++        Idle = 1,
++        Confirm = 2,
++        Busy = 3,
++        Safe = 4,
++        Failed = 5,
++    };
++
++    struct UsbSlot {
++        std::unique_ptr<ControlObject> pState;
++        std::unique_ptr<ControlObject> pSizeGb;
++        std::unique_ptr<ControlObject> pFreeGb;
++        std::unique_ptr<ControlObject> pUsed;
++        std::unique_ptr<ControlObject> pDeck;
++        std::unique_ptr<ControlObject> pFail;
++        std::unique_ptr<ControlPushButton> pEject;
++        QString device;
++        QString mountPoint;
++        QTimer confirmTimer;
++    };
++
++    static QString schemeName(int theme, int accent);
++    static QStringList playerGroups();
++    static bool isPlaying(const QString& group);
++    static bool trackIsOn(const QString& group, const QString& mountPoint);
++
++    void applyStartupDefaults();
++    void applyCrossfaderCurve();
++    void applySleepTimeout();
++    void sleepNow();
++    void keepAwake();
++    void powerOff();
++    void slotAppearanceChanged();
++
++    void pollUsb();
++    void updateUsbNumbers(int slot, qint64 bytesTotal, qint64 bytesAvailable);
++    void clearUsbSlot(int slot);
++    void setUsbState(int slot, UsbState state);
++    UsbState usbState(int slot) const;
++    void onEjectPressed(int slot);
++    void startEject(int slot);
++    void runUnmount(int slot);
++
++    MixxxMainWindow* const m_pMainWindow;
++    const UserSettingsPointer m_pConfig;
++
++    std::unique_ptr<ControlPushButton> m_pStartupQuantize;
++    std::unique_ptr<ControlObject> m_pStartupTempo;
++    std::unique_ptr<ControlObject> m_pStartupTime;
++    std::unique_ptr<ControlObject> m_pXfCurve;
++    std::unique_ptr<ControlObject> m_pLoadBlock;
++    std::unique_ptr<ControlObject> m_pSleep;
++    std::unique_ptr<ControlPushButton> m_pSleepNow;
++    std::unique_ptr<ControlPushButton> m_pPowerOff;
++    std::unique_ptr<ControlObject> m_pPowerHolding;
++    std::unique_ptr<ControlObject> m_pTheme;
++    std::unique_ptr<ControlObject> m_pAccent;
++    std::unique_ptr<ControlObject> m_pUsbCount;
++    std::array<UsbSlot, kUsbSlots> m_usb;
++
++    QTimer m_usbTimer;
++    QTimer m_keepAwakeTimer;
++    QTimer m_powerTimer;
++    bool m_startupApplied;
++    bool m_returnToSettings;
++    bool m_forcedAsleep;
++    bool m_wasPlaying;
++};
+diff --git a/src/grv6/grv6system.cpp b/src/grv6/grv6system.cpp
+new file mode 100644
+--- /dev/null
++++ b/src/grv6/grv6system.cpp
+@@ -0,0 +1,528 @@
++#include "grv6/grv6system.h"
++
++#include <QApplication>
++#include <QEvent>
++#include <QMap>
++#include <QProcess>
++#include <QStorageInfo>
++#include <QtDebug>
++
++#include "control/controlobject.h"
++#include "control/controlpushbutton.h"
++#include "engine/enginexfader.h"
++#include "mixer/playerinfo.h"
++#include "mixer/playermanager.h"
++#include "mixxxmainwindow.h"
++#include "moc_grv6system.cpp"
++#include "track/track.h"
++#include "util/screensaver.h"
++
++namespace {
++
++const QString kGroup = QStringLiteral("[GRV6]");
++
++const QString kThemeNames[] = {QStringLiteral("Dark"), QStringLiteral("Light")};
++const QString kAccentNames[] = {QStringLiteral("Orange"),
++        QStringLiteral("Green"),
++        QStringLiteral("Blue"),
++        QStringLiteral("Red"),
++        QStringLiteral("Purple")};
++constexpr int kNumThemes = 2;
++constexpr int kNumAccents = 5;
++
++// Settings tab TEMPO RANGE segments, as Mixxx rateRange values.
++const double kTempoRanges[] = {0.06, 0.10, 0.16, 0.50};
++// Settings tab SLEEP segments: OFF, then minutes.
++const int kSleepMinutes[] = {0, 5, 10, 15, 30, 60};
++
++ConfigKey key(const QString& item) {
++    return ConfigKey(kGroup, item);
++}
++
++int clampIndex(double value, int count) {
++    const int index = static_cast<int>(value + 0.5);
++    return index < 0 ? 0 : (index >= count ? count - 1 : index);
++}
++
++void setIfExists(const ConfigKey& configKey, double value) {
++    if (ControlObject::exists(configKey)) {
++        ControlObject::set(configKey, value);
++    }
++}
++
++} // namespace
++
++Grv6System::Grv6System(MixxxMainWindow* pMainWindow, UserSettingsPointer pConfig)
++        : QObject(pMainWindow),
++          m_pMainWindow(pMainWindow),
++          m_pConfig(pConfig),
++          m_startupApplied(false),
++          m_returnToSettings(false),
++          m_forcedAsleep(false),
++          m_wasPlaying(false) {
++    // ---- saved settings (persistent controls)
++    m_pStartupQuantize = std::make_unique<ControlPushButton>(
++            key(QStringLiteral("startup_quantize")), true, 1.0);
++    m_pStartupQuantize->setButtonMode(ControlPushButton::TOGGLE);
++    m_pStartupTempo = std::make_unique<ControlObject>(
++            key(QStringLiteral("startup_tempo")), true, false, true, 1.0);
++    m_pStartupTime = std::make_unique<ControlObject>(
++            key(QStringLiteral("startup_time")), true, false, true, 1.0);
++    m_pXfCurve = std::make_unique<ControlObject>(
++            key(QStringLiteral("xf_curve")), true, false, true, 0.0);
++    m_pLoadBlock = std::make_unique<ControlObject>(
++            key(QStringLiteral("load_block")), true, false, true, 1.0);
++    m_pSleep = std::make_unique<ControlObject>(
++            key(QStringLiteral("sleep")), true, false, true, 0.0);
++
++    connect(m_pXfCurve.get(), &ControlObject::valueChanged, this, [this](double) {
++        applyCrossfaderCurve();
++    });
++    connect(m_pSleep.get(), &ControlObject::valueChanged, this, [this](double) {
++        applySleepTimeout();
++    });
++
++    // ---- actions
++    m_pSleepNow = std::make_unique<ControlPushButton>(key(QStringLiteral("sleep_now")));
++    connect(m_pSleepNow.get(), &ControlObject::valueChanged, this, [this](double value) {
++        if (value > 0.0) {
++            sleepNow();
++        }
++    });
++
++    m_pPowerHolding = std::make_unique<ControlObject>(key(QStringLiteral("power_holding")));
++    m_pPowerOff = std::make_unique<ControlPushButton>(key(QStringLiteral("power_off")));
++    m_powerTimer.setSingleShot(true);
++    connect(&m_powerTimer, &QTimer::timeout, this, [this]() {
++        powerOff();
++    });
++    connect(m_pPowerOff.get(), &ControlObject::valueChanged, this, [this](double value) {
++        if (m_pPowerHolding->get() >= 2.0) {
++            return; // already shutting down
++        }
++        if (value > 0.0) {
++            if (!m_powerTimer.isActive()) {
++                m_pPowerHolding->set(1.0);
++                m_powerTimer.start(5000);
++            }
++        } else {
++            m_powerTimer.stop();
++            m_pPowerHolding->set(0.0);
++        }
++    });
++
++    // ---- appearance: stored as the skin colour scheme name ("Dark Orange", ...)
++    m_pTheme = std::make_unique<ControlObject>(key(QStringLiteral("theme")));
++    m_pAccent = std::make_unique<ControlObject>(key(QStringLiteral("accent")));
++    const QString scheme = m_pConfig->getValueString(ConfigKey("[Config]", "Scheme"));
++    for (int theme = 0; theme < kNumThemes; ++theme) {
++        for (int accent = 0; accent < kNumAccents; ++accent) {
++            if (scheme == schemeName(theme, accent)) {
++                m_pTheme->set(theme);
++                m_pAccent->set(accent);
++            }
++        }
++    }
++    connect(m_pTheme.get(), &ControlObject::valueChanged, this, [this](double) {
++        slotAppearanceChanged();
++    });
++    connect(m_pAccent.get(), &ControlObject::valueChanged, this, [this](double) {
++        slotAppearanceChanged();
++    });
++
++    // ---- USB sticks
++    m_pUsbCount = std::make_unique<ControlObject>(key(QStringLiteral("usb_count")));
++    for (int i = 0; i < kUsbSlots; ++i) {
++        const QString prefix = QStringLiteral("usb%1_").arg(i + 1);
++        UsbSlot& slot = m_usb[i];
++        slot.pState = std::make_unique<ControlObject>(key(QString(prefix + QStringLiteral("state"))));
++        slot.pSizeGb = std::make_unique<ControlObject>(key(QString(prefix + QStringLiteral("size_gb"))));
++        slot.pFreeGb = std::make_unique<ControlObject>(key(QString(prefix + QStringLiteral("free_gb"))));
++        slot.pUsed = std::make_unique<ControlObject>(key(QString(prefix + QStringLiteral("used"))));
++        slot.pDeck = std::make_unique<ControlObject>(key(QString(prefix + QStringLiteral("deck"))));
++        slot.pFail = std::make_unique<ControlObject>(key(QString(prefix + QStringLiteral("fail"))));
++        slot.pEject = std::make_unique<ControlPushButton>(key(QString(prefix + QStringLiteral("eject"))));
++        slot.confirmTimer.setSingleShot(true);
++        connect(&slot.confirmTimer, &QTimer::timeout, this, [this, i]() {
++            if (usbState(i) == UsbState::Confirm) {
++                setUsbState(i, UsbState::Idle);
++            }
++        });
++        connect(slot.pEject.get(), &ControlObject::valueChanged, this, [this, i](double value) {
++            if (value > 0.0) {
++                onEjectPressed(i);
++            }
++        });
++    }
++    connect(&m_usbTimer, &QTimer::timeout, this, [this]() {
++        pollUsb();
++    });
++    m_usbTimer.start(2000);
++    pollUsb();
++
++    // ---- keep the screen awake while something plays (see keepAwake())
++    connect(&m_keepAwakeTimer, &QTimer::timeout, this, [this]() {
++        keepAwake();
++    });
++    m_keepAwakeTimer.start(20000);
++    qApp->installEventFilter(this);
++
++    connect(m_pMainWindow, &MixxxMainWindow::skinLoaded, this, &Grv6System::slotSkinLoaded);
++}
++
++Grv6System::~Grv6System() {
++    if (qApp) {
++        qApp->removeEventFilter(this);
++    }
++}
++
++// static
++QString Grv6System::schemeName(int theme, int accent) {
++    const QString name = kThemeNames[clampIndex(theme, kNumThemes)] + QChar(' ') +
++            kAccentNames[clampIndex(accent, kNumAccents)];
++    return name;
++}
++
++// static
++QStringList Grv6System::playerGroups() {
++    QStringList groups;
++    for (unsigned int i = 0; i < PlayerManager::numDecks(); ++i) {
++        groups.append(PlayerManager::groupForDeck(static_cast<int>(i)));
++    }
++    for (unsigned int i = 0; i < PlayerManager::numPreviewDecks(); ++i) {
++        groups.append(PlayerManager::groupForPreviewDeck(static_cast<int>(i)));
++    }
++    for (unsigned int i = 0; i < PlayerManager::numSamplers(); ++i) {
++        groups.append(PlayerManager::groupForSampler(static_cast<int>(i)));
++    }
++    return groups;
++}
++
++// static
++bool Grv6System::isPlaying(const QString& group) {
++    const ConfigKey playKey(group, QStringLiteral("play"));
++    return ControlObject::exists(playKey) && ControlObject::get(playKey) > 0.0;
++}
++
++// static
++bool Grv6System::trackIsOn(const QString& group, const QString& mountPoint) {
++    const TrackPointer pTrack = PlayerInfo::instance().getTrackInfo(group);
++    const QString prefix = mountPoint + QChar('/');
++    return pTrack && pTrack->getLocation().startsWith(prefix);
++}
++
++void Grv6System::slotSkinLoaded() {
++    // Startup time readout, on every skin load: the skin itself resets it
++    // (skin.xml attributes) whenever it loads, e.g. after a theme switch.
++    const double remain = m_pStartupTime->get() >= 0.5 ? 1.0 : 0.0;
++    setIfExists(ConfigKey(QStringLiteral("[Controls]"), QStringLiteral("ShowDurationRemaining")),
++            remain);
++    setIfExists(ConfigKey(QStringLiteral("[Skin]"), QStringLiteral("grv6_time_remain")), remain);
++
++    if (!m_startupApplied) {
++        m_startupApplied = true;
++        applyStartupDefaults();
++        applyCrossfaderCurve();
++        applySleepTimeout();
++    }
++    if (m_returnToSettings) {
++        // Back on the Settings tab after a theme switch reloaded the skin. The
++        // page stack reads this when it is first shown.
++        m_returnToSettings = false;
++        setIfExists(ConfigKey(QStringLiteral("[Skin]"), QStringLiteral("grv6_tab")), 3.0);
++    }
++}
++
++void Grv6System::applyStartupDefaults() {
++    const double quantize = m_pStartupQuantize->get() > 0.0 ? 1.0 : 0.0;
++    const double rateRange = kTempoRanges[clampIndex(m_pStartupTempo->get(), 4)];
++    for (unsigned int i = 0; i < PlayerManager::numDecks(); ++i) {
++        const QString group = PlayerManager::groupForDeck(static_cast<int>(i));
++        setIfExists(ConfigKey(group, QStringLiteral("quantize")), quantize);
++        setIfExists(ConfigKey(group, QStringLiteral("rateRange")), rateRange);
++    }
++}
++
++void Grv6System::applyCrossfaderCurve() {
++    // SMOOTH = constant power with the default curve (no dip in the middle),
++    // SHARP CUT = additive with the steepest curve (scratch style).
++    const bool sharp = m_pXfCurve->get() >= 0.5;
++    const double mode = sharp ? MIXXX_XFADER_ADDITIVE : MIXXX_XFADER_CONSTPWR;
++    const double curve = sharp ? EngineXfader::kTransformMax : EngineXfader::kTransformDefault;
++    const QString group = QString::fromLatin1(EngineXfader::kXfaderConfigKey);
++    setIfExists(ConfigKey(group, QStringLiteral("xFaderMode")), mode);
++    setIfExists(ConfigKey(group, QStringLiteral("xFaderCurve")), curve);
++    setIfExists(ConfigKey(group, QStringLiteral("xFaderCalibration")),
++            EngineXfader::getPowerCalibration(curve));
++    // Keep Preferences > Mixer in step with what is active.
++    m_pConfig->set(ConfigKey(group, QStringLiteral("xFaderMode")),
++            ConfigValue(QString::number(static_cast<int>(mode))));
++    m_pConfig->set(ConfigKey(group, QStringLiteral("xFaderCurve")),
++            ConfigValue(QString::number(curve)));
++}
++
++void Grv6System::applySleepTimeout() {
++    const int minutes = kSleepMinutes[clampIndex(m_pSleep->get(), 6)];
++#if defined(Q_OS_LINUX)
++    mixxx::ScreenSaverHelper::grv6SetSleepTimeout(minutes * 60);
++#endif
++    qDebug() << "GRV6 sleep after" << minutes << "minutes (0 = never)";
++}
++
++void Grv6System::sleepNow() {
++    m_forcedAsleep = true;
++#if defined(Q_OS_LINUX)
++    mixxx::ScreenSaverHelper::grv6SleepNow();
++#endif
++}
++
++void Grv6System::keepAwake() {
++    // The X server blanks the screen after the sleep timeout without input.
++    // Touch input and controller input (Controller::triggerActivity) reset it;
++    // a track playing on its own does not, so reset it here while anything
++    // plays - unless SLEEP NOW was pressed since the last touch.
++    bool playing = false;
++    for (const QString& group : playerGroups()) {
++        if (isPlaying(group)) {
++            playing = true;
++            break;
++        }
++    }
++    if (playing && !m_wasPlaying) {
++        m_forcedAsleep = false; // something was started: not asleep any more
++    }
++    m_wasPlaying = playing;
++    if (playing && !m_forcedAsleep) {
++        mixxx::ScreenSaverHelper::triggerUserActivity();
++    }
++}
++
++bool Grv6System::eventFilter(QObject* pObject, QEvent* pEvent) {
++    if (pEvent->type() == QEvent::MouseButtonPress || pEvent->type() == QEvent::TouchBegin) {
++        m_forcedAsleep = false;
++    }
++    return QObject::eventFilter(pObject, pEvent);
++}
++
++void Grv6System::powerOff() {
++    m_pPowerHolding->set(2.0);
++    // Stop everything, so MixxxMainWindow::confirmExit() does not ask "a deck
++    // is playing, exit?" on a screen nobody can answer.
++    for (const QString& group : playerGroups()) {
++        setIfExists(ConfigKey(group, QStringLiteral("play")), 0.0);
++    }
++    // Mixxx must exit normally to save its settings, so the power-off is
++    // started first, delayed, and Mixxx is closed right after. ~/.xinitrc may
++    // start Mixxx again meanwhile; the power-off ends that too.
++    qWarning() << "GRV6: POWER OFF held for 5 seconds - shutting down";
++    QProcess::startDetached(QStringLiteral("/bin/sh"),
++            {QStringLiteral("-c"),
++                    QStringLiteral("sleep 15; sudo -n /usr/sbin/poweroff || systemctl poweroff")});
++    QTimer::singleShot(500, m_pMainWindow, [this]() {
++        m_pMainWindow->close();
++    });
++}
++
++void Grv6System::slotAppearanceChanged() {
++    const QString name = schemeName(static_cast<int>(m_pTheme->get()),
++            static_cast<int>(m_pAccent->get()));
++    if (name == m_pConfig->getValueString(ConfigKey("[Config]", "Scheme"))) {
++        return;
++    }
++    m_pConfig->set(ConfigKey("[Config]", "Scheme"), ConfigValue(name));
++    m_returnToSettings = true;
++    // Not from inside the button press that changed it: the reload deletes
++    // every skin widget, including that button.
++    QTimer::singleShot(0, m_pMainWindow, &MixxxMainWindow::rebootMixxxView);
++}
++
++// ---------------------------------------------------------------- USB sticks
++
++Grv6System::UsbState Grv6System::usbState(int slot) const {
++    return static_cast<UsbState>(static_cast<int>(m_usb[slot].pState->get()));
++}
++
++void Grv6System::setUsbState(int slot, UsbState state) {
++    m_usb[slot].pState->set(static_cast<double>(state));
++    int count = 0;
++    for (const UsbSlot& usb : m_usb) {
++        if (static_cast<int>(usb.pState->get()) != static_cast<int>(UsbState::Empty)) {
++            ++count;
++        }
++    }
++    m_pUsbCount->set(count);
++}
++
++void Grv6System::clearUsbSlot(int slot) {
++    UsbSlot& usb = m_usb[slot];
++    usb.confirmTimer.stop();
++    usb.device.clear();
++    usb.mountPoint.clear();
++    usb.pSizeGb->set(0.0);
++    usb.pFreeGb->set(0.0);
++    usb.pUsed->set(0.0);
++    usb.pDeck->set(0.0);
++    usb.pFail->set(0.0);
++    setUsbState(slot, UsbState::Empty);
++}
++
++void Grv6System::updateUsbNumbers(int slot, qint64 bytesTotal, qint64 bytesAvailable) {
++    UsbSlot& usb = m_usb[slot];
++    usb.pSizeGb->set(static_cast<double>(bytesTotal) / 1e9);
++    usb.pFreeGb->set(static_cast<double>(bytesAvailable) / 1e9);
++    usb.pUsed->set(bytesTotal > 0
++                    ? 1.0 - static_cast<double>(bytesAvailable) / static_cast<double>(bytesTotal)
++                    : 0.0);
++    int deck = 0;
++    for (unsigned int i = 0; i < PlayerManager::numDecks() && deck == 0; ++i) {
++        if (trackIsOn(PlayerManager::groupForDeck(static_cast<int>(i)), usb.mountPoint)) {
++            deck = static_cast<int>(i) + 1;
++        }
++    }
++    usb.pDeck->set(deck);
++}
++
++void Grv6System::pollUsb() {
++    // Removable sticks are mounted by udisks under /media/<user>/<label>
++    // (or /run/media/<user>/<label>). The SD card is /dev/mmcblk*.
++    QMap<QString, QStorageInfo> mounted;
++    const QList<QStorageInfo> volumes = QStorageInfo::mountedVolumes();
++    for (const QStorageInfo& volume : volumes) {
++        if (!volume.isValid() || !volume.isReady()) {
++            continue;
++        }
++        const QString root = volume.rootPath();
++        if (!root.startsWith(QStringLiteral("/media/")) &&
++                !root.startsWith(QStringLiteral("/run/media/"))) {
++            continue;
++        }
++        const QString device = QString::fromLocal8Bit(volume.device());
++        if (!device.startsWith(QStringLiteral("/dev/sd"))) {
++            continue;
++        }
++        mounted.insert(device, volume);
++    }
++
++    for (int i = 0; i < kUsbSlots; ++i) {
++        UsbSlot& usb = m_usb[i];
++        if (usb.device.isEmpty()) {
++            continue;
++        }
++        const auto it = mounted.constFind(usb.device);
++        if (it != mounted.constEnd()) {
++            updateUsbNumbers(i, it.value().bytesTotal(), it.value().bytesAvailable());
++            mounted.remove(usb.device);
++        } else {
++            const UsbState state = usbState(i);
++            if (state != UsbState::Busy && state != UsbState::Safe) {
++                clearUsbSlot(i); // pulled without ejecting
++            }
++        }
++    }
++
++    // New sticks take the first free slot (USB 1, USB 2, ... in plug order).
++    for (auto it = mounted.constBegin(); it != mounted.constEnd(); ++it) {
++        for (int i = 0; i < kUsbSlots; ++i) {
++            if (m_usb[i].device.isEmpty() && usbState(i) == UsbState::Empty) {
++                m_usb[i].device = it.key();
++                m_usb[i].mountPoint = it.value().rootPath();
++                m_usb[i].pFail->set(0.0);
++                setUsbState(i, UsbState::Idle);
++                updateUsbNumbers(i, it.value().bytesTotal(), it.value().bytesAvailable());
++                break;
++            }
++        }
++    }
++}
++
++void Grv6System::onEjectPressed(int slot) {
++    switch (usbState(slot)) {
++    case UsbState::Idle:
++    case UsbState::Failed:
++        // first tap: ask for a second one within 3 seconds
++        m_usb[slot].pFail->set(0.0);
++        setUsbState(slot, UsbState::Confirm);
++        m_usb[slot].confirmTimer.start(3000);
++        break;
++    case UsbState::Confirm:
++        m_usb[slot].confirmTimer.stop();
++        startEject(slot);
++        break;
++    default:
++        break;
++    }
++}
++
++void Grv6System::startEject(int slot) {
++    UsbSlot& usb = m_usb[slot];
++    if (usb.mountPoint.isEmpty()) {
++        return;
++    }
++    const QStringList groups = playerGroups();
++    for (const QString& group : groups) {
++        if (trackIsOn(group, usb.mountPoint) && isPlaying(group)) {
++            usb.pFail->set(1.0); // refused: a deck is playing a track from it
++            setUsbState(slot, UsbState::Failed);
++            return;
++        }
++    }
++    // Unload paused decks, the preview deck and samplers that hold a track
++    // from this stick, or the stick stays busy and cannot be unmounted.
++    for (const QString& group : groups) {
++        if (trackIsOn(group, usb.mountPoint)) {
++            setIfExists(ConfigKey(group, QStringLiteral("eject")), 1.0);
++            setIfExists(ConfigKey(group, QStringLiteral("eject")), 0.0);
++        }
++    }
++    setUsbState(slot, UsbState::Busy);
++    QTimer::singleShot(1500, this, [this, slot]() {
++        runUnmount(slot);
++    });
++}
++
++void Grv6System::runUnmount(int slot) {
++    const QString device = m_usb[slot].device;
++    if (device.isEmpty()) {
++        return;
++    }
++    auto* pProcess = new QProcess(this);
++    connect(pProcess,
++            qOverload<int, QProcess::ExitStatus>(&QProcess::finished),
++            this,
++            [this, slot, device, pProcess](int exitCode, QProcess::ExitStatus exitStatus) {
++                pProcess->deleteLater();
++                if (m_usb[slot].device != device) {
++                    return;
++                }
++                if (exitStatus == QProcess::NormalExit && exitCode == 0) {
++                    // Spin the stick down too. The partition's disk is the
++                    // device name without its partition number.
++                    QString disk = device;
++                    while (!disk.isEmpty() && disk.back().isDigit()) {
++                        disk.chop(1);
++                    }
++                    QProcess::startDetached(QStringLiteral("udisksctl"),
++                            {QStringLiteral("power-off"),
++                                    QStringLiteral("-b"),
++                                    disk,
++                                    QStringLiteral("--no-user-interaction")});
++                    setUsbState(slot, UsbState::Safe);
++                    QTimer::singleShot(4000, this, [this, slot, device]() {
++                        if (m_usb[slot].device == device) {
++                            clearUsbSlot(slot);
++                        }
++                    });
++                } else {
++                    qWarning() << "GRV6: could not unmount" << device
++                               << pProcess->readAllStandardError();
++                    m_usb[slot].pFail->set(2.0); // the stick is in use
++                    setUsbState(slot, UsbState::Failed);
++                }
++            });
++    pProcess->start(QStringLiteral("/bin/sh"),
++            {QStringLiteral("-c"),
++                    QStringLiteral("sync; udisksctl unmount -b \"$1\" --no-user-interaction "
++                                   "|| sudo -n /usr/bin/umount \"$1\""),
++                    QStringLiteral("grv6-eject"),
++                    device});
++}
