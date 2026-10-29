@@ -37,7 +37,7 @@ and a Mixxx build with better Rekordbox USB support and a kiosk-friendly system 
 ## Features
 
 ### Skin (`GRV6/`)
-- **Four tabs:** Main, Browse, Sampler and Settings, all made for touch on a 1920x1080 screen with no mouse or keyboard.
+- **Four tabs:** Main, Browse, Sampler (work in progress) and Settings, all made for touch on a 1920x1080 screen with no mouse or keyboard.
 - **Four decks, two at a time:** the controller's DECK buttons choose deck 1 or 3 on the left and 2 or 4 on the right. The other deck of each side stays visible as a small strip.
 - **XDJ-style decks:** coloured scrolling waveforms with beat ticks and red downbeats, overviews, big time, BPM (one decimal) and key readouts, tempo range, master tempo, sync leader/follower, loop size, ON AIR.
 - **Browse:** big rows (3-20 on screen), a fixed column layout, a key "traffic light" that turns green when a track mixes with the playing deck, track info and preview, LOAD 1-4.
@@ -146,8 +146,8 @@ The controls shared by the skin, the mapping and the patched build are documente
 
 ## Roadmap
 
-- [ ] Sampler tab design
-- [ ] RMX EMU tab (Groove Circuit)
+- [ ] **Sampler tab** (work in progress): the 16 sample pads work, the final design is still to come
+- [ ] **RMX-1000 integration** (coming): an RMX EMU tab with Pioneer RMX-1000-style effects
 - [ ] Optional slow stop on PLAY (off by default)
 
 ## Credits
