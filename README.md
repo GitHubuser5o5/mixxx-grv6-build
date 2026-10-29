@@ -148,7 +148,8 @@ The controls shared by the skin, the mapping and the patched build are documente
 
 - [ ] **Sampler tab** (work in progress): the 16 sample pads work, the final design is still to come
 - [ ] **RMX-1000 integration** (coming): an RMX EMU tab with Pioneer RMX-1000-style effects
-- [ ] Optional slow stop on PLAY (off by default)
+- [ ] touchscreen support
+- [ ] design still not final, closer to xdj-az coming soon
 
 ## Credits
 
